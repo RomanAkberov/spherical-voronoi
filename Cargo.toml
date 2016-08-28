@@ -1,0 +1,7 @@
+[package]
+name = "spherical_voronoi"
+version = "0.1.0"
+authors = ["Roman Akberov <r.k.akberov@gmail.com>"]
+
+[dependencies]
+nalgebra = "0.9.0"
