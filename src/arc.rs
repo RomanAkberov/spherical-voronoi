@@ -1,19 +1,18 @@
 use std::rc::Rc;
 use std::cell::{RefCell, Cell};
-use std::usize::{self};
 use event::CircleEvent;
 
-pub struct BeachArc {
+pub struct Arc {
     pub face_id: usize,
-    pub start_id: Cell<usize>,
+    pub start_id: Cell<Option<usize>>,
     pub event: RefCell<Option<Rc<CircleEvent>>>,
 }
 
-impl BeachArc {
+impl Arc {
     pub fn new(face_id: usize) -> Self {
-        BeachArc { 
+        Arc { 
             face_id: face_id,
-            start_id: Cell::new(usize::MAX),
+            start_id: Cell::new(None),
             event: RefCell::new(None),
         }
     }

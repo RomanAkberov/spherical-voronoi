@@ -6,17 +6,20 @@ use std::usize::{self};
 use nalgebra::{Vector3, Cross};
 use point::Point;
 use event::{Event, CircleEvent};
-use beach_arc::{BeachArc};
+use arc::Arc;
 use diagram::{Diagram, Vertex, Edge, Face};
-use ref_eq::RefEq;
 
 struct SphericalVoronoi {
     events: BinaryHeap<Event>,
-    beach: Vec<Rc<BeachArc>>,
+    beach: Vec<Rc<Arc>>,
     vertices: Vec<Vertex>,
     edges: Vec<Edge>,
     faces: Vec<Face>,
     scan_theta: f64,
+}
+
+fn ref_eq<'a, 'b, T>(thing: &'a T, other: &'b T) -> bool {
+    (thing as *const T) == (other as *const T)
 }
 
 fn is_phi_between(phi: f64, phi_start: f64, phi_end: f64) -> bool {
@@ -45,7 +48,10 @@ fn remap_id(id: usize, missing_ids: &[usize]) -> usize {
 }
         
 impl SphericalVoronoi {
-    fn new(directions: &[Vector3<f64>]) -> Self {
+    fn new(directions: &[Vector3<f64>]) -> Result<Self, Error> {
+        if directions.len() < 2 {
+            return Err(Error::FewPoints);
+        }
         let mut faces = Vec::new();
         for direction in directions {
             faces.push(Face::new(Point::from_cartesian(*direction)));
@@ -54,17 +60,17 @@ impl SphericalVoronoi {
         for (face_id, face) in faces.iter().enumerate() {
             events.push(Event::Site(face_id, face.point));
         }
-        SphericalVoronoi {
+        Ok(SphericalVoronoi {
             events: events,
             beach: Vec::new(),
             vertices: Vec::new(),
             edges: Vec::new(),
             faces: faces,
             scan_theta: 0.0,
-        }
+        })
     }
     
-    fn build(mut self) -> Diagram {
+    fn build(mut self) -> Result<Diagram, Error> {
         while let Some(event) = self.events.pop() {
             self.scan_theta = event.point().theta;
             match event {
@@ -74,29 +80,29 @@ impl SphericalVoronoi {
         }
         self.cleanup_vertices();
         self.finish_faces();
-        Diagram {
+        Ok(Diagram {
             vertices: self.vertices,
             edges: self.edges,
             faces: self.faces,
-        }
+        })
     }
     
     fn new_arc(&mut self, face_id: usize) {
-        self.beach.push(Rc::new(BeachArc::new(face_id)));
+        self.beach.push(Rc::new(Arc::new(face_id)));
     }
     
-    fn arc_point(&self, arc: &BeachArc) -> &Point {
+    fn arc_point(&self, arc: &Arc) -> &Point {
         &self.faces[arc.face_id].point    
     }
     
-    fn new_circle_event(&self, arc0: &Rc<BeachArc>, arc1: &Rc<BeachArc>, arc2: &Rc<BeachArc>) -> Rc<CircleEvent> {
+    fn new_circle_event(&self, arc0: &Rc<Arc>, arc1: &Rc<Arc>, arc2: &Rc<Arc>) -> Rc<CircleEvent> {
         let p01 = self.arc_point(arc0).position - self.arc_point(arc1).position;
         let p21 = self.arc_point(arc2).position - self.arc_point(arc1).position;
         let center = Point::from_cartesian(p01.cross(&p21));
         let radius = center.distance(self.arc_point(arc0)); 
         let point = Point::from_spherical(center.theta + radius, center.phi);
         Rc::new(CircleEvent {
-            arcs: [arc0.clone(), arc1.clone(), arc2.clone()],
+            arcs: (arc0.clone(), arc1.clone(), arc2.clone()),
             center: center,
             radius: radius,
             point: point,
@@ -104,8 +110,8 @@ impl SphericalVoronoi {
         })
     }
     
-    fn arc_index(&self, arc: &Rc<BeachArc>) -> Option<usize> {
-        self.beach.iter().position(|x| x.ref_eq(arc))
+    fn arc_index(&self, arc: &Rc<Arc>) -> Option<usize> {
+        self.beach.iter().position(|x| ref_eq(x, arc))
     }
     
     fn new_edge(&mut self, vertex_id0: usize, vertex_id1: usize) -> usize {
@@ -140,8 +146,8 @@ impl SphericalVoronoi {
             let arc1 = self.beach[1].clone();
             let point = self.phi_to_point(point.phi, *self.arc_point(&arc0));
             let vertex_id = self.new_vertex(point, vec![face_id, arc0.face_id]);
-            arc0.start_id.set(vertex_id);
-            arc1.start_id.set(vertex_id);
+            arc0.start_id.set(Some(vertex_id));
+            arc1.start_id.set(Some(vertex_id));
         } else {
             let mut arc_index = 0;
             while arc_index < self.beach.len() {
@@ -162,15 +168,15 @@ impl SphericalVoronoi {
                 };
                 if is_phi_between(point.phi, phi_start, phi_end) {
                     self.try_remove_circle_event(&arc);
-                    let arc2 = Rc::new(BeachArc::new(arc.face_id));
+                    let arc2 = Rc::new(Arc::new(arc.face_id));
                     self.beach.insert(arc_index, arc2.clone());
                     arc_index += 1;
-                    let new_arc = Rc::new(BeachArc::new(face_id));
+                    let new_arc = Rc::new(Arc::new(face_id));
                     self.beach.insert(arc_index, new_arc.clone());
                     let point = self.phi_to_point(point.phi, *self.arc_point(&arc));
                     let vertex_id = self.new_vertex(point, vec![face_id, arc.face_id]);
-                    arc2.start_id.set(vertex_id);
-                    new_arc.start_id.set(vertex_id);
+                    arc2.start_id.set(Some(vertex_id));
+                    new_arc.start_id.set(Some(vertex_id));
                     let prev_index = self.arc_index(&prev_arc).unwrap();
                     let arc_index2 = self.next_arc_index(prev_index);
                     let event1 = self.new_circle_event(&prev_arc, &arc2, &new_arc);
@@ -196,67 +202,57 @@ impl SphericalVoronoi {
         }
     }
     
+    fn merge_arcs(&mut self, arc0: &Rc<Arc>, arc1: &Rc<Arc>, arc2: &Rc<Arc>, vertex_id: Option<usize>) {
+        let (face_id0, face_id1, face_id2) = (arc0.face_id, arc1.face_id, arc2.face_id);
+        if face_id0 != face_id1 && face_id1 != face_id2 && face_id2 != face_id0 {
+            let event = self.new_circle_event(arc0, arc1, arc2);
+            if event.point.theta >= self.scan_theta {
+                *arc1.event.borrow_mut() = Some(event.clone());
+                if let Some(vertex_id) = vertex_id {
+                    arc1.start_id.set(Some(vertex_id));
+                }
+                self.events.push(Event::Circle(event));
+            }
+        }
+    }
+    
+    fn edge_from_arc(&mut self, arc: &Arc, vertex_id: usize) {
+        if let Some(start_id) = arc.start_id.get() {
+            self.new_edge(start_id, vertex_id);
+        }    
+    }
+    
     fn handle_circle_event(&mut self, event: &Rc<CircleEvent>) {
         if event.is_invalid.get() {
             return;
         }
         //println!("Circle");
-        let arc0 = event.arcs[0].clone();
-        let arc1 = event.arcs[1].clone();
-        let arc2 = event.arcs[2].clone();
-        assert!(arc1.event.borrow().as_ref().unwrap().ref_eq(event));
+        let (ref arc0, ref arc1, ref arc2) = event.arcs;
+        assert!(ref_eq(arc1.event.borrow().as_ref().unwrap(), event));
         *arc1.event.borrow_mut() = None;
         self.try_remove_circle_event(&arc0);
         self.try_remove_circle_event(&arc2);
         let vertex_id = self.new_vertex(event.center, vec![arc0.face_id, arc1.face_id, arc2.face_id]);
-        let start_id0 = arc0.start_id.get();
-        if start_id0 != usize::MAX {
-            self.new_edge(start_id0, vertex_id);
-        }
-        let start_id1 = arc1.start_id.get();
-        if start_id1 != usize::MAX {
-            self.new_edge(start_id1, vertex_id);
-        }
+        self.edge_from_arc(arc0, vertex_id);
+        self.edge_from_arc(arc1, vertex_id);
         let index = self.arc_index(&arc1).unwrap();
         self.beach.remove(index);
         let index0 = self.arc_index(&arc0).unwrap();
         let index2 = self.arc_index(&arc2).unwrap();
         if self.prev_arc_index(index0) == index2 {
-            let start_id2 = arc2.start_id.get();
-            if start_id2 != usize::MAX {
-                self.new_edge(start_id2, vertex_id);
-            }
+            self.edge_from_arc(arc2, vertex_id);
             self.beach.remove(index0);
             let index2 = self.arc_index(&arc2).unwrap();
             self.beach.remove(index2);
         } else {
-            let it0 = self.prev_arc_index(index0);
-            let it1 = self.next_arc_index(index2);
-            let arc_it0 = self.beach[it0].clone();
-            let arc_it1 = self.beach[it1].clone();
-            if arc_it0.face_id != arc0.face_id &&
-                arc0.face_id != arc2.face_id &&
-                arc_it0.face_id != arc2.face_id {
-                let event = self.new_circle_event(&arc_it0, &arc0, &arc2);
-                if event.point.theta >= self.scan_theta {
-                    *arc0.event.borrow_mut() = Some(event.clone());
-                    arc0.start_id.set(vertex_id);
-                    self.events.push(Event::Circle(event));
-                }
-            }
-            if arc0.face_id != arc2.face_id &&
-                arc2.face_id != arc_it1.face_id &&
-                arc_it1.face_id != arc0.face_id {
-                let event = self.new_circle_event(&arc0, &arc2, &arc_it1);
-                if event.point.theta >= self.scan_theta {
-                    *arc2.event.borrow_mut() = Some(event.clone());
-                    self.events.push(Event::Circle(event));
-                }
-            }
+            let prev_arc = self.beach[self.prev_arc_index(index0)].clone();
+            let next_arc = self.beach[self.next_arc_index(index2)].clone();
+            self.merge_arcs(&prev_arc, &arc0, &arc2, Some(vertex_id));
+            self.merge_arcs(&arc0, &arc2, &next_arc, None);
         }
     }
     
-    fn arc_intersection(&self, arc1: &BeachArc, arc2: &BeachArc) -> Option<Point> {
+    fn arc_intersection(&self, arc1: &Arc, arc2: &Arc) -> Option<Point> {
         let point1 = self.arc_point(arc1);
         let point2 = self.arc_point(arc2);
         let theta1 = point1.theta;
@@ -319,7 +315,7 @@ impl SphericalVoronoi {
         (index + 1) % self.beach.len()
     }
     
-    fn try_remove_circle_event(&self, arc: &Rc<BeachArc>) -> bool {
+    fn try_remove_circle_event(&self, arc: &Rc<Arc>) -> bool {
         let is_some = arc.event.borrow().is_some();
         if is_some {
             {
@@ -400,13 +396,19 @@ impl SphericalVoronoi {
     }
 }
 
-pub fn generate(directions: &[Vector3<f64>]) -> Diagram {
-    SphericalVoronoi::new(directions).build()
+#[derive(PartialEq)]
+pub enum Error {
+    FewPoints    
 }
 
-pub fn generate_relaxed(directions: &[Vector3<f64>], relaxations: usize) -> Diagram {
-    let mut diagram = generate(directions);
-    for i in 0..relaxations {
+pub fn generate(directions: &[Vector3<f64>]) -> Result<Diagram, Error> {
+    let voronoi = try!(SphericalVoronoi::new(directions));
+    voronoi.build()
+}
+
+pub fn generate_relaxed(directions: &[Vector3<f64>], relaxations: usize) -> Result<Diagram, Error> {
+    let mut diagram = try!(generate(directions));
+    for _ in 0..relaxations {
         let new_directions: Vec<Vector3<f64>> = diagram.faces.iter().map(|face| {
             let mut center = Vector3::new(0.0, 0.0, 0.0);
             for vertex_id in face.vertex_ids.iter() {
@@ -415,6 +417,31 @@ pub fn generate_relaxed(directions: &[Vector3<f64>], relaxations: usize) -> Diag
             let len = face.vertex_ids.len() as f64;
             Vector3::new(center.x / len, center.y / len, center.z / len)
         }).collect();
+        diagram = try!(generate(&new_directions));
     }
-    diagram
+    Ok(diagram)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nalgebra::Vector3;
+    
+    #[test]
+    fn zero_points() {
+        assert!(if let Err(Error::FewPoints) = generate(&vec![]) {
+            true
+        } else {
+            false
+        });
+    }
+    
+    #[test]
+    fn one_point() {
+        assert!(if let Err(Error::FewPoints) = generate(&vec![Vector3::new(1.0, 0.0, 0.0)]) {
+            true
+        } else {
+            false
+        });
+    }
 }

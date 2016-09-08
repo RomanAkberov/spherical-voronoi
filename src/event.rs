@@ -2,10 +2,10 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 use std::cell::Cell;
 use point::Point;
-use beach_arc::BeachArc;
+use arc::Arc;
 
 pub struct CircleEvent {
-    pub arcs: [Rc<BeachArc>; 3],
+    pub arcs: (Rc<Arc>, Rc<Arc>, Rc<Arc>),
     pub center: Point,
     pub radius: f64,
     pub point: Point,
