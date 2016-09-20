@@ -1,7 +1,8 @@
 extern crate nalgebra;
 
+mod id;
 mod point;
-mod event;
-mod arc;
+mod events;
+mod beach;
 pub mod diagram;
 pub mod voronoi;
