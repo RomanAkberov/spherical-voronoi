@@ -1,6 +1,6 @@
 use id::{Id, Pool, IdIter};
 use point::Point;
-use nalgebra::{Cross, Dot};
+use nalgebra::{Vector3, Cross, Dot};
 
 pub struct VertexData {
     point: Point,
@@ -88,7 +88,11 @@ impl Diagram {
     pub fn vertex_point(&self, vertex: Vertex) -> Point {
         self.vertices[vertex].point    
     }
-     
+    
+    pub fn vertex_position(&self, vertex: Vertex) -> Vector3<f64> {
+        self.vertex_point(vertex).position
+    } 
+    
     pub fn vertex_faces(&self, vertex: Vertex) -> &[Face] {
         &self.vertices[vertex].faces
     }
@@ -111,6 +115,10 @@ impl Diagram {
     
     pub fn face_point(&self, face: Face) -> Point {
         self.faces[face].point
+    }
+    
+    pub fn face_position(&self, face: Face) -> Vector3<f64> {
+        self.face_point(face).position
     }
     
     pub fn face_vertices(&self, face: Face) -> &[Vertex] {
