@@ -1,10 +1,12 @@
 use std::ops::{Index, IndexMut};
 use std::marker::PhantomData;
 use std::fmt;
-use std::iter::Map;
-use std::ops::Range;
 use std::usize::{self};
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::{Iter, Keys};
+use std::iter::Cloned;
 
 pub struct Id<T> {
     index: usize,
@@ -56,29 +58,45 @@ impl<T> Ord for Id<T> {
     }
 }
 
-pub struct Pool<T> {
-    items: Vec<T>
+impl<T> Hash for Id<T> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        self.index.hash(hasher);
+    }
 }
 
-pub type IdIter<T> = Map<Range<usize>, fn(usize) -> Id<T>>;
+pub struct Pool<T> {
+    items: HashMap<Id<T>, T>,
+    next_id: Id<T>,
+}
+
+pub type Ids<'a, T> = Cloned<Keys<'a, Id<T>, T>>;
+pub type IterMut<'a, T> = ::std::collections::hash_map::IterMut<'a, Id<T>, T>;
 
 impl<T> Pool<T> {
     pub fn new() -> Self {
-        Pool { items: Vec::new() }
+        Pool { 
+            items: HashMap::new(),
+            next_id: Id::new(0),
+        }
     }
     
     pub fn add(&mut self, item: T) -> Id<T> {
-        let id = Id::new(self.items.len());
-        self.items.push(item);
+        let id = self.next_id;
+        self.items.insert(id, item);
+        self.next_id = Id::new(id.index + 1);
         id
     }
     
-    pub fn ids(&self) -> IdIter<T> {
-        (0..self.items.len()).map(Id::new)
+    pub fn remove(&mut self, id: Id<T>) {
+        self.items.remove(&id);
     }
     
-    pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
-        self.items.retain(f);
+    pub fn ids(&self) -> Ids<T> {
+        self.items.keys().cloned()
+    }
+    
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        self.items.iter_mut()
     }
 }
 
@@ -86,12 +104,12 @@ impl<T> Index<Id<T>> for Pool<T> {
     type Output = T;
     
     fn index(&self, index: Id<T>) -> &Self::Output {
-        &self.items[index.index]
+        &self.items[&index]
     }
 }
 
 impl<T> IndexMut<Id<T>> for Pool<T> {
     fn index_mut(&mut self, index: Id<T>) -> &mut Self::Output {
-        &mut self.items[index.index]
+        self.items.get_mut(&index).unwrap()
     }
 }
