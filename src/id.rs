@@ -5,7 +5,7 @@ use std::usize::{self};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::{Iter, Keys};
+use std::collections::hash_map::Keys;
 use std::iter::Cloned;
 
 pub struct Id<T> {
@@ -71,6 +71,7 @@ pub struct Pool<T> {
 
 pub type Ids<'a, T> = Cloned<Keys<'a, Id<T>, T>>;
 pub type IterMut<'a, T> = ::std::collections::hash_map::IterMut<'a, Id<T>, T>;
+pub type Iter<'a, T> = ::std::collections::hash_map::Iter<'a, Id<T>, T>;
 
 impl<T> Pool<T> {
     pub fn new() -> Self {
@@ -97,6 +98,10 @@ impl<T> Pool<T> {
     
     pub fn iter_mut(&mut self) -> IterMut<T> {
         self.items.iter_mut()
+    }
+    
+    pub fn iter(&self) -> Iter<T> {
+        self.items.iter()
     }
 }
 

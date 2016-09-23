@@ -1,6 +1,7 @@
-use id::{Id, Pool, IterMut, Ids};
-use point::Point;
+use std::cmp::Ordering;
 use nalgebra::{Vector3, Cross, Dot};
+use id::{Id, Pool, Ids};
+use point::Point;
 
 pub struct VertexData {
     point: Point,
@@ -35,6 +36,10 @@ fn is_bad_vertex(vertex_data: &VertexData) -> bool {
 fn is_bad_edge(edge_data: &EdgeData, vertices: &Pool<VertexData>) -> bool {
     let (vertex0, vertex1) = edge_data.vertices;
     is_bad_vertex(&vertices[vertex0]) || is_bad_vertex(&vertices[vertex1])
+}
+
+fn compare_clockwise(n: Vector3<f64>, v1: Vector3<f64>, v2: Vector3<f64>) -> Ordering {
+    (v1 - n).cross(&(v2 - n)).dot(&n).partial_cmp(&0.0).unwrap()
 }
 
 impl Diagram {
@@ -136,7 +141,7 @@ impl Diagram {
         let mut new_edges = Vec::new();
         for vertex in self.vertices() {
             if self.vertex_faces(vertex).len() == 2 {
-                let edges = &self.vertices[vertex].edges;
+                let edges = self.vertex_edges(vertex);
                 assert_eq!(edges.len(), 2);
                 let vertex0 = self.other_edge_vertex(edges[0], vertex).unwrap();
                 let vertex1 = self.other_edge_vertex(edges[1], vertex).unwrap();
@@ -146,45 +151,35 @@ impl Diagram {
         for (vertex0, vertex1) in new_edges {
             self.new_edge(vertex0, vertex1);
         }
-        let mut bad_vertices = Vec::new();
-        for vertex in self.vertices() {
-            if is_bad_vertex(&self.vertices[vertex]) {
-                bad_vertices.push(vertex);
-            }
-        }
-        for vertex in bad_vertices {
-            self.vertices.remove(vertex);
-        }
-        let mut bad_edges = Vec::new();
-        for edge in self.edges() {
-            if is_bad_edge(&self.edges[edge], &self.vertices) {
-                bad_edges.push(edge);           
-            } 
-        }
+        let bad_edges: Vec<Edge> = self.edges.iter().
+            filter_map(|(&edge, data)| if is_bad_edge(data, &self.vertices) { Some(edge) } else { None }).
+            collect();
         for edge in bad_edges {
             self.edges.remove(edge);
+        }
+        let bad_vertices: Vec<Vertex> = self.vertices.iter().
+            filter_map(|(&vertex, data)| if is_bad_vertex(data) { Some(vertex) } else { None }).
+            collect();
+        for vertex in bad_vertices {
+            self.vertices.remove(vertex);
         }
     }
     
     pub fn finish_faces(&mut self) {
-        let mut edge_faces = Vec::new(); 
-        for edge in self.edges() {
+        for (&edge, data) in self.edges.iter_mut() {
             let mut common = Vec::new(); 
-            let (vertex0, vertex1) = self.edge_vertices(edge);
-            for face0 in self.vertex_faces(vertex0) {
-                for face1 in self.vertex_faces(vertex1) {
+            let (vertex0, vertex1) = data.vertices;
+            for face0 in &self.vertices[vertex0].faces {
+                for face1 in &self.vertices[vertex1].faces {
                     if face0 == face1 {
                         common.push(*face0);
                     }
                 }
             }
             assert_eq!(common.len(), 2);
-            edge_faces.push((edge, common[0], common[1]));
-        }
-        for (edge, face0, face1) in edge_faces {
-            self.faces[face0].edges.push(edge);
-            self.faces[face1].edges.push(edge);
-            self.edges[edge].faces = (face0, face1);
+            self.faces[common[0]].edges.push(edge);
+            self.faces[common[1]].edges.push(edge);
+            data.faces = (common[0], common[1]);
         }
         for vertex in self.vertices.ids() {
             for face in &self.vertices[vertex].faces {
@@ -194,7 +189,7 @@ impl Diagram {
         for (_, data) in self.faces.iter_mut() {
             let n = data.point.position;
             let vertices = &self.vertices;
-            data.vertices.sort_by(|v1, v2| (vertices[*v1].point.position - n).cross(&(vertices[*v2].point.position - n)).dot(&n).partial_cmp(&0.0).unwrap());
+            data.vertices.sort_by(|v1, v2| compare_clockwise(n, vertices[*v1].point.position, vertices[*v2].point.position));
         }
     }
 }
