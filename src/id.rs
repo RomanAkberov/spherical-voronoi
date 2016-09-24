@@ -3,10 +3,10 @@ use std::marker::PhantomData;
 use std::fmt;
 use std::usize::{self};
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::Keys;
 use std::iter::Cloned;
+use fnv::FnvHashMap;
 
 pub struct Id<T> {
     index: usize,
@@ -65,7 +65,7 @@ impl<T> Hash for Id<T> {
 }
 
 pub struct Pool<T> {
-    items: HashMap<Id<T>, T>,
+    items: FnvHashMap<Id<T>, T>,
     next_id: Id<T>,
 }
 
@@ -76,7 +76,7 @@ pub type Iter<'a, T> = ::std::collections::hash_map::Iter<'a, Id<T>, T>;
 impl<T> Pool<T> {
     pub fn new() -> Self {
         Pool { 
-            items: HashMap::new(),
+            items: FnvHashMap::default(),
             next_id: Id::new(0),
         }
     }

@@ -5,3 +5,4 @@ authors = ["Roman Akberov <r.k.akberov@gmail.com>"]
 
 [dependencies]
 nalgebra = "0.9.0"
+fnv = "1.0.3"

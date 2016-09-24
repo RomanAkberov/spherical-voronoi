@@ -1,4 +1,5 @@
 extern crate nalgebra;
+extern crate fnv;
 
 mod id;
 mod point;
