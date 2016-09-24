@@ -26,15 +26,15 @@ impl SphericalVoronoi {
         if directions.len() < 2 {
             return Err(Error::FewPoints);
         }
-        let mut diagram = Diagram::new();
-        let mut events = Events::new();
+        let mut diagram = Diagram::default();
+        let mut events = Events::default();
         for direction in directions {
             let face = diagram.new_face(Point::from_cartesian(*direction));
-            events.add_site(face, diagram.face_point(face));
+            events.add_site(face, diagram.faces.point(face));
         }
         Ok(SphericalVoronoi {
             events: events,
-            beach: Beach::new(),
+            beach: Beach::default(),
             diagram: diagram,
             scan_theta: 0.0,
         })
@@ -55,7 +55,7 @@ impl SphericalVoronoi {
     }
   
     fn arc_point(&self, arc: Arc) -> Point {
-        self.diagram.face_point(self.beach.face(arc))  
+        self.diagram.faces.point(self.beach.face(arc))  
     }
     
     fn site_event(&mut self, face: Face, point: Point) {
@@ -262,15 +262,9 @@ pub fn generate(directions: &[Vector3<f64>]) -> Result<Diagram, Error> {
 pub fn generate_relaxed(directions: &[Vector3<f64>], relaxations: usize) -> Result<Diagram, Error> {
     let mut diagram = try!(generate(directions));
     for _ in 0..relaxations {
-        let new_directions: Vec<Vector3<f64>> = diagram.faces().map(|face| {
-            let mut center = Vector3::new(0.0, 0.0, 0.0);
-            let mut count = 0.0f64;
-            for vertex in diagram.face_vertices(face) {
-                center += diagram.vertex_point(*vertex).position;
-                count += 1.0;
-            }
-            Vector3::new(center.x / count, center.y / count, center.z / count)
-        }).collect();
+        let new_directions: Vec<Vector3<f64>> = diagram.faces.ids().
+            map(|face| diagram.center(face)).
+            collect();
         diagram = try!(generate(&new_directions));
     }
     Ok(diagram)

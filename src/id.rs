@@ -74,13 +74,6 @@ pub type IterMut<'a, T> = ::std::collections::hash_map::IterMut<'a, Id<T>, T>;
 pub type Iter<'a, T> = ::std::collections::hash_map::Iter<'a, Id<T>, T>;
 
 impl<T> Pool<T> {
-    pub fn new() -> Self {
-        Pool { 
-            items: FnvHashMap::default(),
-            next_id: Id::new(0),
-        }
-    }
-    
     pub fn add(&mut self, item: T) -> Id<T> {
         let id = self.next_id;
         self.items.insert(id, item);
@@ -116,5 +109,14 @@ impl<T> Index<Id<T>> for Pool<T> {
 impl<T> IndexMut<Id<T>> for Pool<T> {
     fn index_mut(&mut self, index: Id<T>) -> &mut Self::Output {
         self.items.get_mut(&index).unwrap()
+    }
+}
+
+impl<T> Default for Pool<T> {
+    fn default() -> Self {
+        Pool {
+            items: FnvHashMap::default(),
+            next_id: Id::new(0),
+        }
     }
 }

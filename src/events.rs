@@ -43,19 +43,13 @@ pub struct Event {
     pub kind: EventKind,    
 }
 
+#[derive(Default)]
 pub struct Events {
     circles: Pool<CircleData>,
     heap: BinaryHeap<Event>,
 }
 
 impl Events {
-    pub fn new() -> Self {
-        Events {
-            circles: Pool::new(),
-            heap: BinaryHeap::new(),
-        }    
-    }
-    
     pub fn add_site(&mut self, face: Face, point: Point) {
         self.heap.push(Event { point: point, kind: EventKind::Site(face) });
     }

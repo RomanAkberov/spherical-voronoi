@@ -1,5 +1,5 @@
 use events::Circle;
-use diagram::{Face, Vertex};
+use diagram::{Vertex, Face};
 use id::{Id, Pool};
 
 pub struct ArcData {
@@ -9,19 +9,13 @@ pub struct ArcData {
 }
 pub type Arc = Id<ArcData>;
 
+#[derive(Default)]
 pub struct Beach {
     data: Pool<ArcData>,
     arcs: Vec<Arc>,   
 }
 
 impl Beach {
-    pub fn new() -> Self {
-        Beach {
-            data: Pool::new(),
-            arcs: Vec::new(),
-        }
-    }
-    
     pub fn index(&self, arc: Arc) -> Option<usize> {
         self.arcs.iter().position(|x| *x == arc)
     }
