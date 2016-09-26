@@ -1,6 +1,6 @@
 use events::Circle;
 use diagram::{Vertex, Face};
-use id::{Id, Pool};
+use id::{Id, IdVec};
 
 pub struct ArcData {
     face: Face,
@@ -11,7 +11,7 @@ pub type Arc = Id<ArcData>;
 
 #[derive(Default)]
 pub struct Beach {
-    data: Pool<ArcData>,
+    data: IdVec<ArcData>,
     arcs: Vec<Arc>,   
 }
 

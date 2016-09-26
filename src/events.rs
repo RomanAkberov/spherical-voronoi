@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 use point::Point;
 use beach::Arc;
 use diagram::Face;
-use id::{Id, Pool};
+use id::{Id, IdVec};
 
 pub struct CircleData {
     pub arcs: (Arc, Arc, Arc),
@@ -45,7 +45,7 @@ pub struct Event {
 
 #[derive(Default)]
 pub struct Events {
-    circles: Pool<CircleData>,
+    circles: IdVec<CircleData>,
     heap: BinaryHeap<Event>,
 }
 

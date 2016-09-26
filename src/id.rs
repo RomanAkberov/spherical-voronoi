@@ -64,7 +64,7 @@ impl<T> Hash for Id<T> {
     }
 }
 
-pub struct Pool<T> {
+pub struct IdHash<T> {
     items: FnvHashMap<Id<T>, T>,
     next_id: Id<T>,
 }
@@ -73,7 +73,7 @@ pub type Ids<'a, T> = Cloned<Keys<'a, Id<T>, T>>;
 pub type IterMut<'a, T> = ::std::collections::hash_map::IterMut<'a, Id<T>, T>;
 pub type Iter<'a, T> = ::std::collections::hash_map::Iter<'a, Id<T>, T>;
 
-impl<T> Pool<T> {
+impl<T> IdHash<T> {
     pub fn add(&mut self, item: T) -> Id<T> {
         let id = self.next_id;
         self.items.insert(id, item);
@@ -98,7 +98,7 @@ impl<T> Pool<T> {
     }
 }
 
-impl<T> Index<Id<T>> for Pool<T> {
+impl<T> Index<Id<T>> for IdHash<T> {
     type Output = T;
     
     fn index(&self, index: Id<T>) -> &Self::Output {
@@ -106,17 +106,65 @@ impl<T> Index<Id<T>> for Pool<T> {
     }
 }
 
-impl<T> IndexMut<Id<T>> for Pool<T> {
+impl<T> IndexMut<Id<T>> for IdHash<T> {
     fn index_mut(&mut self, index: Id<T>) -> &mut Self::Output {
         self.items.get_mut(&index).unwrap()
     }
 }
 
-impl<T> Default for Pool<T> {
+impl<T> Default for IdHash<T> {
     fn default() -> Self {
-        Pool {
+        IdHash {
             items: FnvHashMap::default(),
             next_id: Id::new(0),
+        }
+    }
+}
+
+pub struct IdVec<T> {
+    items: Vec<T>,
+}
+
+pub type IdVecIter<T> = ::std::iter::Map<::std::ops::Range<usize>, fn(usize) -> Id<T>>;
+
+impl<T> IdVec<T> {
+    pub fn add(&mut self, item: T) -> Id<T> {
+        let id = Id::new(self.items.len());
+        self.items.push(item);
+        id
+    }
+    
+    pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
+        self.items.retain(f);
+    }
+    
+    pub fn ids(&self) -> IdVecIter<T> {
+        (0..self.items.len()).map(Id::new)
+    }
+    
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+}
+
+impl<T> Index<Id<T>> for IdVec<T> {
+    type Output = T;
+    
+    fn index(&self, index: Id<T>) -> &Self::Output {
+        &self.items[index.index]
+    }
+}
+
+impl<T> IndexMut<Id<T>> for IdVec<T> {
+    fn index_mut(&mut self, index: Id<T>) -> &mut Self::Output {
+        &mut self.items[index.index]
+    }
+}
+
+impl<T> Default for IdVec<T> {
+    fn default() -> Self {
+        IdVec {
+            items: Vec::new()
         }
     }
 }
