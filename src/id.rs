@@ -134,6 +134,12 @@ impl<T> IdVec<T> {
         id
     }
     
+    pub fn remove(&mut self, id: Id<T>) -> Id<T> {
+        let prev_id = Id::new(self.items.len() - 1);
+        self.items.swap_remove(id.index);
+        prev_id
+    }
+    
     pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
         self.items.retain(f);
     }

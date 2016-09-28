@@ -1,13 +1,14 @@
 use nalgebra::{Vector3, Cross, Dot};
 use id::{Id, IdVec, Ids, IterMut, IdVecIter};
 use point::Point;
+use fnv::FnvHashMap;
 
-fn remap_id<T>(id: Id<T>, missing_ids: &[Id<T>]) -> Id<T> {
-    let position = match missing_ids.binary_search(&id) {
-        Ok(position) => position,
-        Err(position) => position,
-    };
-    Id::new(id.index() - position)
+fn remap_id<T>(id: Id<T>, remap: &FnvHashMap<Id<T>, Id<T>>) -> Id<T> {
+    let mut result = id;
+    while let Some(&mapped) = remap.get(&result) {
+        result = mapped;
+    }
+    result
 }
 
 pub struct VertexData {
@@ -209,43 +210,47 @@ impl Diagram {
     }       
     
     pub fn cleanup_vertices(&mut self) {
+        let mut bad_vertices = Vec::new();
+        let mut bad_edges = Vec::new();
         for vertex in self.vertices.ids() {
             if self.vertices.faces(vertex).len() == 2 {
-                let (vertex0, vertex1) = {
+                let (edge0, edge1) = {
                     let edges = &self.vertices.edges(vertex);
-                    //println!("{:?} {:?} {:?}", vertex, edges, &self.vertices[vertex].faces);
                     assert_eq!(edges.len(), 2);
-                    (self.edges.other_vertex(edges[0], vertex), self.edges.other_vertex(edges[1], vertex))
+                    (edges[0], edges[1])
                 };
-                self.new_edge(vertex0.unwrap(), vertex1.unwrap());
+                let vertex0 = self.edges.other_vertex(edge0, vertex).unwrap();
+                let vertex1 = self.edges.other_vertex(edge1, vertex).unwrap();
+                self.new_edge(vertex0, vertex1);
+                bad_vertices.push(vertex);
+                bad_edges.push(edge0);
+                bad_edges.push(edge1);
             }
         }
-        let bad_vertices: Vec<_> = self.vertices.ids().
-            filter(|vertex| is_bad_vertex(&self.vertices.vertices[*vertex])).
-            collect();
-        let bad_edges: Vec<_> = self.edges.ids().
-            filter(|edge| is_bad_edge(&self.edges.edges[*edge], &self.vertices.vertices)).
-            collect();
-        {
-            let vertices = &self.vertices.vertices;
-            self.edges.retain(|edge| !is_bad_edge(edge, vertices));
+        bad_edges.sort();
+        bad_edges.dedup();
+        let mut vertices_remap = FnvHashMap::default();
+        for vertex in bad_vertices {
+            let new_vertex = remap_id(vertex, &vertices_remap);
+            let prev_vertex = self.vertices.vertices.remove(new_vertex);
+            vertices_remap.insert(prev_vertex, vertex);
         }
-        self.vertices.retain(|vertex| !is_bad_vertex(vertex));
-        for vertex in self.vertices.ids() {
-            for edge in self.vertices.vertices[vertex].edges.iter_mut() {
-                *edge = remap_id(*edge, &bad_edges);
-            }
+        let mut edges_remap = FnvHashMap::default();
+        for edge in bad_edges {
+            let new_edge = remap_id(edge, &edges_remap);
+            let prev_edge = self.edges.edges.remove(new_edge);
+            edges_remap.insert(prev_edge, edge);
         }
         for edge in self.edges.ids() {
             let (vertex0, vertex1) = self.edges.vertices(edge);
-            self.edges.edges[edge].vertices = (remap_id(vertex0, &bad_vertices), remap_id(vertex1, &bad_vertices));
+            self.edges.edges[edge].vertices = (remap_id(vertex0, &vertices_remap), remap_id(vertex1, &vertices_remap));
         }
         for face in self.faces.ids() {
             for vertex in self.faces.faces[face].vertices.iter_mut() {
-                *vertex = remap_id(*vertex, &bad_vertices);
+                *vertex = remap_id(*vertex, &vertices_remap);
             }
             for edge in self.faces.faces[face].edges.iter_mut() {
-                *edge = remap_id(*edge, &bad_edges);
+                *edge = remap_id(*edge, &edges_remap);
             }
         }
     }
@@ -266,15 +271,29 @@ impl Diagram {
             self.faces.add_edge(common[1], edge);
             self.edges.set_faces(edge, common[0], common[1]);
         }
-        for vertex in self.vertices.ids() {
-            for face in self.vertices.faces(vertex).iter() {
-                self.faces.faces[*face].vertices.push(vertex);
-            }
-        }
         for face in self.faces.ids() {
             let n = self.faces.position(face);
-            let vertices = &self.vertices.vertices;
-            self.faces.faces[face].vertices.sort_by(|v1, v2| (vertices[*v1].point.position - n).cross(&(vertices[*v2].point.position - n)).dot(&n).partial_cmp(&0.0).unwrap());
+            let mut edge = self.faces.edges(face)[0];
+            let (v0, v1) = self.edges.vertices(edge);
+            let (prev, v) = if are_clockwise(n, self.vertices.position(v0), self.vertices.position(v1)) {
+                (v0, v1) 
+            } else {
+                (v1, v0)
+            };
+            self.faces.add_vertex(face, prev);
+            let mut vertex = v;
+            for _ in 0..self.faces.edges(face).len() - 1 {
+                self.faces.add_vertex(face, vertex);
+                for &e in self.faces.edges(face) {
+                    if e != edge {
+                        if let Some(v) = self.edges.other_vertex(e, vertex) {
+                            vertex = v;
+                            edge = e;
+                            break;
+                        }
+                    }
+                }    
+            }
         }
     }
 }
