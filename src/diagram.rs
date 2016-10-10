@@ -1,5 +1,5 @@
 use nalgebra::{Vector3, Cross, Dot};
-use id::{Id, IdVec, Ids, IterMut, IdVecIter};
+use id::{Id, IdVec, IdVecIter};
 use point::Point;
 use fnv::FnvHashMap;
 
@@ -150,16 +150,6 @@ impl Faces {
         self.faces.len()
     }
 }
-
-fn is_bad_vertex(vertex_data: &VertexData) -> bool {
-    vertex_data.faces.len() <= 2
-}
-
-fn is_bad_edge(edge_data: &EdgeData, vertices: &IdVec<VertexData>) -> bool {
-    let (vertex0, vertex1) = edge_data.vertices;
-    is_bad_vertex(&vertices[vertex0]) || is_bad_vertex(&vertices[vertex1])
-}
-
 
 #[derive(Default)]
 pub struct Diagram {
