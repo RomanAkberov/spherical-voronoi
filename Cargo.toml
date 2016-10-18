@@ -4,6 +4,6 @@ version = "0.1.0"
 authors = ["Roman Akberov <r.k.akberov@gmail.com>"]
 
 [dependencies]
-id = {path = "../id"}
-diagram = {path = "../diagram"}
+id = {git = "https://github.com/RomanAkberov/id"}
+diagram = {git = "https://github.com/RomanAkberov/diagram"}
 cgmath = "*"
