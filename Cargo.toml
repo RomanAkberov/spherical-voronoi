@@ -4,6 +4,6 @@ version = "0.1.0"
 authors = ["Roman Akberov <r.k.akberov@gmail.com>"]
 
 [dependencies]
-id = {git = "https://github.com/RomanAkberov/id", branch = "develop"}
-nalgebra = "0.9.0"
-fnv = "1.0.3"
+id = {path = "../id"}
+diagram = {path = "../diagram"}
+cgmath = "*"

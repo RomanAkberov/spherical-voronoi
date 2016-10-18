@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 use point::Point;
 use beach::Arc;
 use diagram::Face;
-use id::{Id, IdVec};
+use id::IdVec;
 
 pub struct CircleData {
     pub arcs: (Arc, Arc, Arc),
@@ -11,7 +11,17 @@ pub struct CircleData {
     pub radius: f64,
     pub is_invalid: bool,
 }
-pub type Circle = Id<CircleData>;
+create_id!(Circle);
+
+pub enum EventKind {
+    Circle(Circle),
+    Site(Face),
+}
+
+pub struct Event {
+    pub point: Point,
+    pub kind: EventKind,    
+}
 
 impl PartialOrd for Event {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -33,20 +43,18 @@ impl PartialEq for Event {
 
 impl Eq for Event {}
 
-pub enum EventKind {
-    Circle(Circle),
-    Site(Face),
-}
-
-pub struct Event {
-    pub point: Point,
-    pub kind: EventKind,    
-}
-
-#[derive(Default)]
 pub struct Events {
-    circles: IdVec<CircleData>,
+    circles: IdVec<Circle, CircleData>,
     heap: BinaryHeap<Event>,
+}
+
+impl Default for Events {
+    fn default() -> Self {
+        Events {
+            circles: Default::default(),
+            heap: Default::default(),
+        }
+    }
 }
 
 impl Events {
@@ -55,7 +63,7 @@ impl Events {
     }
     
     pub fn add_circle(&mut self, arcs: (Arc, Arc, Arc), center: Point, radius: f64, point: Point) -> Circle {
-        let circle = self.circles.add(CircleData {
+        let circle = self.circles.push(CircleData {
             arcs: arcs,
             center: center,
             radius: radius,

@@ -1,9 +1,9 @@
-extern crate nalgebra;
-extern crate fnv;
+extern crate cgmath;
+#[macro_use]
 extern crate id;
+extern crate diagram;
 
-mod point;
+pub mod point;
 mod events;
 mod beach;
-pub mod diagram;
 pub mod voronoi;
