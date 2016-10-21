@@ -1,5 +1,5 @@
 use std::ops::{Index, IndexMut};
-use id::{Id, IdHash};
+use id::{Id, IdVec};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Color {
