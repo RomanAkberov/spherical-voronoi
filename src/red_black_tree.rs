@@ -19,14 +19,14 @@ struct NodeData<Node: Id, T> {
 
 pub struct RedBlackTree<Node: Id, T> {
     root: Option<Node>,
-    nodes: IdHash<Node, NodeData<Node, T>>,
+    nodes: IdVec<Node, NodeData<Node, T>>,
 }
 
 impl<Node: Id, T> Default for RedBlackTree<Node, T> {
     fn default() -> Self {
         RedBlackTree {
             root: None,
-            nodes: IdHash::default(),
+            nodes: IdVec::default(),
         }
     }
 }
@@ -96,7 +96,7 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
     }
     
     pub fn insert_after(&mut self, node: Option<Node>, value: T) -> Node {
-	    let successor = self.nodes.insert(NodeData {
+	    let successor = self.nodes.push(NodeData {
 	        value: value,
 	        next: None,
 	        prev: None,
@@ -197,7 +197,7 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 		let left = self.left(node);
 		let right = self.right(node);
 		let node_color = self.color(node);
-		self.nodes.remove(node);
+		//self.nodes.remove(node);
 		let next = if let Some(left) = left {
 		    if let Some(right) = right {
 		        Some(self.first(right))
