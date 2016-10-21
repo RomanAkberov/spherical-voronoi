@@ -1,6 +1,7 @@
 use events::Circle;
 use diagram::{Vertex, Face};
 use red_black_tree::RedBlackTree;
+use id::Id;
 
 pub struct ArcData {
     face: Face,

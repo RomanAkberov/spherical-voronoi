@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 use point::Point;
 use beach::Arc;
 use diagram::Face;
-use id::IdVec;
+use id::{Id, IdVec};
 
 pub struct CircleData {
     pub arcs: (Arc, Arc, Arc),

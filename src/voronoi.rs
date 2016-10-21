@@ -27,9 +27,6 @@ struct SphericalVoronoi<V, E, F>
     beach: Beach,
     diagram: Diagram<V, E, F>,
     scan_theta: SinCosCache,
-    total_events: usize,
-    bad_events: usize,
-    search_lengths: Vec<usize>,
 }
 
 fn in_range(phi: f64, phi_start: f64, phi_end: f64) -> Ordering {
@@ -69,9 +66,6 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
             beach: Beach::default(),
             diagram: diagram,
             scan_theta: 0.0.into(),
-            total_events: 0,
-            bad_events: 0,
-            search_lengths: Vec::new(),
         })
     }
     
@@ -84,11 +78,8 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                 EventKind::Circle(event) => self.circle_event(event),
             }
         }
-        try!(self.cleanup_vertices());
-        try!(self.finish_faces());
-        let failure = 100.0 * self.bad_events as f64 / self.total_events as f64;
-        let average = self.search_lengths.iter().sum::<usize>() as f64 / self.bad_events as f64;
-        //println!("Tree failure: {:.2}%, average linear seach length: {}", failure, average);
+        self.cleanup_vertices();
+        self.finish_faces();
         Ok(self.diagram)
     }
   
@@ -145,8 +136,6 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                 return;
             }
             let mut use_tree = true;
-            let mut search_length = 0;
-            self.total_events += 1;
             loop {
                 let prev_arc = self.beach.prev(arc);
                 let next_arc = self.beach.next(arc);
@@ -162,10 +151,8 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                                 // the tree has failed us, do the linear search from now on.
                                 arc = self.beach.last();
                                 use_tree = false;
-                                self.bad_events += 1;
                             }
                         } else {
-                            search_length += 1;
                             arc = self.beach.prev(arc);
                         }
                     },
@@ -177,10 +164,8 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                                 // the tree has failed us, do the linear search from now on.
                                 arc = self.beach.first();
                                 use_tree = false;
-                                self.bad_events += 1;
                             }
                         } else {
-                            search_length += 1;
                             arc = self.beach.next(arc);
                         }
                     },
@@ -206,9 +191,6 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                         if self.try_remove_circle(prev_arc) {
                             let prev_prev = self.beach.prev(prev_arc);
                             self.try_add_circle(prev_prev, prev_arc, arc2, -2.0 * PI);
-                        }
-                        if !use_tree {
-                            self.search_lengths.push(search_length);
                         }
                         break;
                     }
@@ -340,15 +322,13 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         }
     }
     
-    fn cleanup_vertices(&mut self) -> Result<(), Error> {
+    fn cleanup_vertices(&mut self) {
         let mut bad_vertices = Vec::new();
         for vertex in self.diagram.vertices() {
             if self.diagram.vertex_faces(vertex).len() == 2 {
                 let (edge0, edge1) = {
                     let edges = self.diagram.vertex_edges(vertex);
-                    if edges.len() != 2 {
-                        return Result::Err(Error::WrongEdgesNum)
-                    }
+                    assert_eq!(edges.len(), 2);
                     (edges[0], edges[1])
                 };
                 let vertex0 = self.diagram.other_edge_vertex(edge0, vertex).unwrap();
@@ -358,7 +338,6 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
             }
         }
         self.diagram.remove_vertices(&bad_vertices);
-        Ok(())
     }
     
     fn vertex_point(&self, vertex: Vertex) -> &Point {
@@ -373,7 +352,7 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         self.diagram.face_data(face).position()
     }
     
-    fn finish_faces(&mut self) -> Result<(), Error> {
+    fn finish_faces(&mut self) {
         for edge in self.diagram.edges() {
             let mut common = Vec::new(); 
             let (vertex0, vertex1) = self.diagram.edge_vertices(edge);
@@ -384,9 +363,7 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                     }
                 }
             }
-            if common.len() != 2 {
-                return Err(Error::WrongCommonVerticesNum);
-            }
+            assert_eq!(common.len(), 2);
             self.diagram.add_face_edge(common[0], edge);
             self.diagram.add_face_edge(common[1], edge);
             self.diagram.set_edge_faces(edge, common[0], common[1]);
@@ -415,7 +392,6 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                 }    
             }
         }
-        Ok(())
     }
 }
 
