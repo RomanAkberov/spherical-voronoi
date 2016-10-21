@@ -1,4 +1,5 @@
 use std::f64::consts::PI;
+use std::cmp::Ordering;
 use cgmath::prelude::*;
 use cgmath::Point3;
 use point::{Point, SinCosCache};
@@ -26,13 +27,28 @@ struct SphericalVoronoi<V, E, F>
     beach: Beach,
     diagram: Diagram<V, E, F>,
     scan_theta: SinCosCache,
+    total_events: usize,
+    bad_events: usize,
+    search_lengths: Vec<usize>,
 }
 
-fn is_phi_between(phi: f64, phi_start: f64, phi_end: f64) -> bool {
+fn in_range(phi: f64, phi_start: f64, phi_end: f64) -> Ordering {
     if phi_start <= phi_end {
-        phi_start <= phi && phi <= phi_end
+        if phi < phi_start {
+            Ordering::Less
+        } else if phi > phi_end {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
     } else {
-        phi < phi_end || phi > phi_start
+        if phi < phi_end || phi > phi_start {
+            Ordering::Equal
+        } else if phi >= phi_end {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
     }
 }
         
@@ -53,20 +69,26 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
             beach: Beach::default(),
             diagram: diagram,
             scan_theta: 0.0.into(),
+            total_events: 0,
+            bad_events: 0,
+            search_lengths: Vec::new(),
         })
     }
     
     fn build(mut self) -> Result<Diagram<V, E, F>, Error> {
         while let Some(event) = self.events.pop() {
             self.scan_theta = event.point.theta;
-            //println!("Scan theta: {}", self.scan_theta);
+            //println!("Scan theta: {}", self.scan_theta.value);
             match event.kind {
                 EventKind::Site(face) => self.site_event(face, event.point),
                 EventKind::Circle(event) => self.circle_event(event),
             }
         }
-        self.cleanup_vertices();
-        self.finish_faces();
+        try!(self.cleanup_vertices());
+        try!(self.finish_faces());
+        let failure = 100.0 * self.bad_events as f64 / self.total_events as f64;
+        let average = self.search_lengths.iter().sum::<usize>() as f64 / self.bad_events as f64;
+        //println!("Tree failure: {:.2}%, average linear seach length: {}", failure, average);
         Ok(self.diagram)
     }
   
@@ -88,59 +110,114 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         self.diagram.add_edge(E::default(), vertex0, vertex1)
     }
     
-    fn site_event(&mut self, face: Face, point: Point) {
-        //println!("Site: {:?} len: {}", point, self.beach.len());
-        if self.beach.len() == 0 {
-            self.beach.add(0, face);
-        } else if self.beach.len() == 1 {
-            self.beach.add(1, face);
-            let arc0 = self.beach.get(0);
-            let arc1 = self.beach.get(1);
-            let point = self.phi_to_point(point.phi, self.arc_point(arc0));
-            let faces = [face, self.beach.face(arc0)];
-            let vertex = self.create_vertex(point, &faces);
-            self.beach.set_start(arc0, Some(vertex));
-            self.beach.set_start(arc1, Some(vertex));
-        } else {
-            let mut arc_index = 0;
-            while arc_index < self.beach.len() {
-                let arc = self.beach.get(arc_index);
-                let prev_index = self.beach.prev_index(arc_index);
-                let prev_arc = self.beach.get(prev_index);
-                let next_index = self.beach.next_index(arc_index);
-                let next_arc = self.beach.get(next_index);
-                let phi_start = self.arc_phi(prev_arc, arc);
-                let phi_end = self.arc_phi(arc, next_arc);
-                if is_phi_between(point.phi(), phi_start, phi_end) {
-                    self.try_remove_circle(arc);
-                    let arc2 = {
-                        let face = self.beach.face(arc);
-                        self.beach.add(arc_index, face)
-                    };
-                    arc_index += 1;
-                    let new_arc = self.beach.add(arc_index, face);
-                    let point = self.phi_to_point(point.phi, self.arc_point(arc));
-                    let faces = [face, self.beach.face(arc)];
-                    //println!("!");
-                    let vertex = self.create_vertex(point, &faces);
-                    self.beach.set_start(arc2, Some(vertex));
-                    self.beach.set_start(new_arc, Some(vertex));
-                    let prev_index = self.beach.index(prev_arc).unwrap();
-                    let arc_index2 = self.beach.next_index(prev_index);
-                    self.try_add_circle(prev_arc, arc2, new_arc, point.theta());
-                    self.try_add_circle(new_arc, arc, next_arc, point.theta());
-                    if self.try_remove_circle(prev_arc) {
-                        let prev_prev_index = self.beach.prev_index(prev_index);
-                        let arc0 = self.beach.get(prev_prev_index);
-                        let arc1 = self.beach.get(prev_index);
-                        let arc2 = self.beach.get(arc_index2);
-                        self.try_add_circle(arc0, arc1, arc2, -2.0 * PI);
-                    }
-                    break;
+            /*fn dump_beach(&self) {
+
+        print!("[");
+        if self.beach.root().is_some() {
+            let mut arc = self.beach.first();
+            for i in 0..self.beach.len() {
+                if i > 0 {
+                    print!(", ");
                 }
-                arc_index += 1;
+                print!("{:?} {:?}", arc, self.arc_point(arc).phi());
+                if i < self.beach.len() - 1 {
+                    arc = self.beach.next(arc);
+                }
             }
         }
+        //println!("]");
+        
+    }*/
+
+    fn site_event(&mut self, face: Face, point: Point) {
+        //println!("Site: {:?} len: {}", point, self.beach.len());
+        //self.dump_beach();
+        if let Some(mut arc) = self.beach.root() {
+            if self.beach.len() == 1 {
+                self.beach.insert_after(Some(arc), face);
+                let arc0 = self.beach.first();
+                let arc1 = self.beach.last();
+                let point = self.phi_to_point(point.phi, self.arc_point(arc0));
+                let faces = [face, self.beach.face(arc0)];
+                let vertex = self.create_vertex(point, &faces);
+                self.beach.set_start(arc0, Some(vertex));
+                self.beach.set_start(arc1, Some(vertex));
+                return;
+            }
+            let mut use_tree = true;
+            let mut search_length = 0;
+            self.total_events += 1;
+            loop {
+                let prev_arc = self.beach.prev(arc);
+                let next_arc = self.beach.next(arc);
+                let phi_start = self.arcs_intersection(prev_arc, arc);
+                let phi_end = self.arcs_intersection(arc, next_arc);
+                //println!("{:?}: {} < {} < {}", arc, phi_start, point.phi(), phi_end);
+                match in_range(point.phi(), phi_start, phi_end) {
+                    Ordering::Less => {
+                        if use_tree {
+                            if let Some(left) = self.beach.left(arc) {
+                                arc = left;
+                            } else {
+                                // the tree has failed us, do the linear search from now on.
+                                arc = self.beach.last();
+                                use_tree = false;
+                                self.bad_events += 1;
+                            }
+                        } else {
+                            search_length += 1;
+                            arc = self.beach.prev(arc);
+                        }
+                    },
+                    Ordering::Greater => {
+                        if use_tree {
+                            if let Some(right) = self.beach.right(arc) {
+                                arc = right;
+                            } else {
+                                // the tree has failed us, do the linear search from now on.
+                                arc = self.beach.first();
+                                use_tree = false;
+                                self.bad_events += 1;
+                            }
+                        } else {
+                            search_length += 1;
+                            arc = self.beach.next(arc);
+                        }
+                    },
+                    Ordering::Equal => {
+                        self.try_remove_circle(arc);
+                        let arc2 = {
+                            let face = self.beach.face(arc);
+                            let a = if prev_arc == self.beach.last() {
+                                None
+                            } else {
+                                Some(prev_arc)
+                            };
+                            self.beach.insert_after(a, face)
+                        };
+                        let new_arc = self.beach.insert_after(Some(arc2), face);
+                        let point = self.phi_to_point(point.phi, self.arc_point(arc));
+                        let faces = [face, self.beach.face(arc)];
+                        let vertex = self.create_vertex(point, &faces);
+                        self.beach.set_start(arc2, Some(vertex));
+                        self.beach.set_start(new_arc, Some(vertex));
+                        self.try_add_circle(prev_arc, arc2, new_arc, point.theta());
+                        self.try_add_circle(new_arc, arc, next_arc, point.theta());
+                        if self.try_remove_circle(prev_arc) {
+                            let prev_prev = self.beach.prev(prev_arc);
+                            self.try_add_circle(prev_prev, prev_arc, arc2, -2.0 * PI);
+                        }
+                        if !use_tree {
+                            self.search_lengths.push(search_length);
+                        }
+                        break;
+                    }
+                }
+            }
+        } else {
+            self.beach.insert_after(None, face);
+        }
+        //self.dump_beach();
     }
     
     fn merge_arcs(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, vertex: Option<Vertex>) {
@@ -166,7 +243,9 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
             return;
         }
         //println!("Circle");
+        //self.dump_beach();
         let (arc0, arc1, arc2) = self.events.arcs(event);
+        //println!("{:?}, {:?}, {:?}", arc0, arc1, arc2);
         assert_eq!(self.beach.circle(arc1), Some(event));
         self.beach.set_circle(arc1, None);
         self.try_remove_circle(arc0);
@@ -176,24 +255,21 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         let vertex = self.create_vertex(point, &faces);
         self.edge_from_arc(arc0, vertex);
         self.edge_from_arc(arc1, vertex);
-        let index = self.beach.index(arc1).unwrap();
-        self.beach.remove(index);
-        let index0 = self.beach.index(arc0).unwrap();
-        let index2 = self.beach.index(arc2).unwrap();
-        if self.beach.prev_index(index0) == index2 {
+        self.beach.remove(arc1);
+        if self.beach.prev(arc0) == arc2 {
             self.edge_from_arc(arc2, vertex);
-            self.beach.remove(index0);
-            let index2 = self.beach.index(arc2).unwrap();
-            self.beach.remove(index2);
+            self.beach.remove(arc0);
+            self.beach.remove(arc2);
         } else {
-            let prev_arc = self.beach.get(self.beach.prev_index(index0));
-            let next_arc = self.beach.get(self.beach.next_index(index2));
-            self.merge_arcs(prev_arc, arc0, arc2, Some(vertex));
-            self.merge_arcs(arc0, arc2, next_arc, None);
+            let prev = self.beach.prev(arc0);
+            let next = self.beach.next(arc2);
+            self.merge_arcs(prev, arc0, arc2, Some(vertex));
+            self.merge_arcs(arc0, arc2, next, None);
         }
+        //self.dump_beach();
     }
     
-    fn arc_phi(&mut self, arc0: Arc, arc1: Arc) -> f64 {
+    fn arcs_intersection(&mut self, arc0: Arc, arc1: Arc) -> f64 {
         let point0 = self.arc_point(arc0);
         let point1 = self.arc_point(arc1);       
         let theta0 = point0.theta;
@@ -264,13 +340,15 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         }
     }
     
-    fn cleanup_vertices(&mut self) {
+    fn cleanup_vertices(&mut self) -> Result<(), Error> {
         let mut bad_vertices = Vec::new();
         for vertex in self.diagram.vertices() {
             if self.diagram.vertex_faces(vertex).len() == 2 {
                 let (edge0, edge1) = {
                     let edges = self.diagram.vertex_edges(vertex);
-                    assert_eq!(edges.len(), 2);
+                    if edges.len() != 2 {
+                        return Result::Err(Error::WrongEdgesNum)
+                    }
                     (edges[0], edges[1])
                 };
                 let vertex0 = self.diagram.other_edge_vertex(edge0, vertex).unwrap();
@@ -280,6 +358,7 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
             }
         }
         self.diagram.remove_vertices(&bad_vertices);
+        Ok(())
     }
     
     fn vertex_point(&self, vertex: Vertex) -> &Point {
@@ -294,7 +373,7 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         self.diagram.face_data(face).position()
     }
     
-    fn finish_faces(&mut self) {
+    fn finish_faces(&mut self) -> Result<(), Error> {
         for edge in self.diagram.edges() {
             let mut common = Vec::new(); 
             let (vertex0, vertex1) = self.diagram.edge_vertices(edge);
@@ -305,7 +384,9 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                     }
                 }
             }
-            assert_eq!(common.len(), 2);
+            if common.len() != 2 {
+                return Err(Error::WrongCommonVerticesNum);
+            }
             self.diagram.add_face_edge(common[0], edge);
             self.diagram.add_face_edge(common[1], edge);
             self.diagram.set_edge_faces(edge, common[0], common[1]);
@@ -334,12 +415,15 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                 }    
             }
         }
+        Ok(())
     }
 }
 
 #[derive(PartialEq)]
 pub enum Error {
-    FewPoints    
+    FewPoints,
+    WrongEdgesNum,
+    WrongCommonVerticesNum    
 }
 
 pub fn generate<V, E, F>(points: &[Point]) -> Result<Diagram<V, E, F>, Error>
@@ -388,11 +472,11 @@ fn wrap(phi: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nalgebra::Vector3;
-    
+    use point::Point;
+
     #[test]
     fn zero_points() {
-        assert!(if let Err(Error::FewPoints) = generate(&vec![]) {
+        assert!(if let Err(Error::FewPoints) = generate::<Point, (), Point>(&vec![]) {
             true
         } else {
             false
@@ -401,7 +485,7 @@ mod tests {
     
     #[test]
     fn one_point() {
-        assert!(if let Err(Error::FewPoints) = generate(&vec![Vector3::new(1.0, 0.0, 0.0)]) {
+        assert!(if let Err(Error::FewPoints) = generate::<Point, (), Point>(&vec![Point::from_cartesian(1.0, 0.0, 0.0)]) {
             true
         } else {
             false
