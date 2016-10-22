@@ -5,28 +5,14 @@ use cgmath::Point3;
 use point::{Point, SinCosCache};
 use events::{Events, EventKind, Circle};
 use beach::{Beach, Arc};
-use diagram::{Diagram, Vertex, Edge, Face};
+use diagram::{Diagram, Kind, Vertex, Edge, Face};
 
-pub trait Position: From<Point> {
+pub trait Position : From<Point> {
     fn point(&self) -> &Point;
-    
-    fn position(&self) -> Point3<f64> {
-        self.point().position
-    }
-}
 
-impl Position for Point {
-    fn point(&self) -> &Point {
-        self
+    fn position(&self) -> &Point3<f64> {
+        &self.point().position
     }
-}
-
-struct SphericalVoronoi<V, E, F>
-    where V: Position, E: Default, F: Position {
-    events: Events,
-    beach: Beach,
-    diagram: Diagram<V, E, F>,
-    scan_theta: SinCosCache,
 }
 
 fn in_range(phi: f64, phi_start: f64, phi_end: f64) -> Ordering {
@@ -48,31 +34,49 @@ fn in_range(phi: f64, phi_start: f64, phi_end: f64) -> Ordering {
         }
     }
 }
+
+fn are_clockwise(n: Point3<f64>, p0: Point3<f64>, p1: Point3<f64>) -> bool {
+    (p0 - n).cross(p1 - n).dot(n.to_vec()) < 0.0
+}
+
+fn wrap(phi: f64) -> f64 {
+    if phi > PI {
+        phi - 2.0 * PI
+    } else if phi < -PI {
+        phi + 2.0 * PI
+    } else {
+        phi
+    }
+}
+
+struct Builder<K: Kind> where K::Vertex: Position, K::Edge: Default, K::Face: Position {
+    events: Events<K>,
+    beach: Beach<K>,
+    diagram: Diagram<K>,
+    scan_theta: SinCosCache,
+}
         
-impl<V, E, F> SphericalVoronoi<V, E, F> 
-    where V: Position, E: Default, F: Position {
+impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: Position {
     fn new(points: &[Point]) -> Result<Self, Error> {
         if points.len() < 2 {
             return Err(Error::FewPoints);
         }
-        let mut diagram = Diagram::default();
-        let mut events = Events::default();
-        for &point in points {
-            let face = diagram.add_face(point.into());
-            events.add_site(face, point);
-        }
-        Ok(SphericalVoronoi {
-            events: events,
+        let mut builder = Builder {
+            events: Events::default(),
             beach: Beach::default(),
-            diagram: diagram,
+            diagram: Diagram::default(),
             scan_theta: 0.0.into(),
-        })
+        };
+        for &point in points {
+            let face = builder.diagram.add_face(point.into());
+            builder.events.add_site(face, point);
+        }
+        Ok(builder)
     }
     
-    fn build(mut self) -> Result<Diagram<V, E, F>, Error> {
+    fn build(mut self) -> Result<Diagram<K>, Error> {
         while let Some(event) = self.events.pop() {
             self.scan_theta = event.point.theta;
-            //println!("Scan theta: {}", self.scan_theta.value);
             match event.kind {
                 EventKind::Site(face) => self.site_event(face, event.point),
                 EventKind::Circle(event) => self.circle_event(event),
@@ -83,12 +87,11 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         Ok(self.diagram)
     }
   
-    fn arc_point(&self, arc: Arc) -> &Point {
-        self.diagram.face_data(self.beach.face(arc)).point()
+    fn arc_point(&self, arc: Arc<K>) -> &Point {
+        &self.diagram.face_data(self.beach.face(arc)).point()
     }
     
-    fn create_vertex(&mut self, point: Point, faces: &[Face]) -> Vertex {
-        //println!("Vertex: {:?}", point);
+    fn create_vertex(&mut self, point: Point, faces: &[Face<K>]) -> Vertex<K> {
         let vertex = self.diagram.add_vertex(point.into());
         for &face in faces {
             self.diagram.add_vertex_face(vertex, face);
@@ -96,33 +99,11 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         vertex
     }
     
-    fn create_edge(&mut self, vertex0: Vertex, vertex1: Vertex) -> Edge {
-        //println!("Edge [{:?}, {:?}]", self.vertex_point(vertex0), self.vertex_point(vertex1));
-        self.diagram.add_edge(E::default(), vertex0, vertex1)
+    fn create_edge(&mut self, vertex0: Vertex<K>, vertex1: Vertex<K>) -> Edge<K> {
+        self.diagram.add_edge(Default::default(), vertex0, vertex1)
     }
-    
-            /*fn dump_beach(&self) {
 
-        print!("[");
-        if self.beach.root().is_some() {
-            let mut arc = self.beach.first();
-            for i in 0..self.beach.len() {
-                if i > 0 {
-                    print!(", ");
-                }
-                print!("{:?} {:?}", arc, self.arc_point(arc).phi());
-                if i < self.beach.len() - 1 {
-                    arc = self.beach.next(arc);
-                }
-            }
-        }
-        //println!("]");
-        
-    }*/
-
-    fn site_event(&mut self, face: Face, point: Point) {
-        //println!("Site: {:?} len: {}", point, self.beach.len());
-        //self.dump_beach();
+    fn site_event(&mut self, face: Face<K>, point: Point) {
         if let Some(mut arc) = self.beach.root() {
             if self.beach.len() == 1 {
                 self.beach.insert_after(Some(arc), face);
@@ -141,7 +122,6 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                 let next_arc = self.beach.next(arc);
                 let phi_start = self.arcs_intersection(prev_arc, arc);
                 let phi_end = self.arcs_intersection(arc, next_arc);
-                //println!("{:?}: {} < {} < {}", arc, phi_start, point.phi(), phi_end);
                 match in_range(point.phi(), phi_start, phi_end) {
                     Ordering::Less => {
                         if use_tree {
@@ -199,10 +179,9 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         } else {
             self.beach.insert_after(None, face);
         }
-        //self.dump_beach();
     }
     
-    fn merge_arcs(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, vertex: Option<Vertex>) {
+    fn merge_arcs(&mut self, arc0: Arc<K>, arc1: Arc<K>, arc2: Arc<K>, vertex: Option<Vertex<K>>) {
         let (face0, face1, face2) = (self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2));
         if face0 != face1 && face1 != face2 && face2 != face0 {
             let theta = self.scan_theta.value;
@@ -214,20 +193,17 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         }
     }
     
-    fn edge_from_arc(&mut self, arc: Arc, vertex: Vertex) {
+    fn edge_from_arc(&mut self, arc: Arc<K>, vertex: Vertex<K>) {
         if let Some(start) = self.beach.start(arc) {
             self.create_edge(start, vertex);
         }    
     }
     
-    fn circle_event(&mut self, event: Circle) {
+    fn circle_event(&mut self, event: Circle<K>) {
         if self.events.is_invalid(event) {
             return;
         }
-        //println!("Circle");
-        //self.dump_beach();
         let (arc0, arc1, arc2) = self.events.arcs(event);
-        //println!("{:?}, {:?}, {:?}", arc0, arc1, arc2);
         assert_eq!(self.beach.circle(arc1), Some(event));
         self.beach.set_circle(arc1, None);
         self.try_remove_circle(arc0);
@@ -248,10 +224,9 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
             self.merge_arcs(prev, arc0, arc2, Some(vertex));
             self.merge_arcs(arc0, arc2, next, None);
         }
-        //self.dump_beach();
     }
     
-    fn arcs_intersection(&mut self, arc0: Arc, arc1: Arc) -> f64 {
+    fn arcs_intersection(&mut self, arc0: Arc<K>, arc1: Arc<K>) -> f64 {
         let point0 = self.arc_point(arc0);
         let point1 = self.arc_point(arc1);       
         let theta0 = point0.theta;
@@ -296,7 +271,7 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         }
     }
     
-    fn try_add_circle(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, theta: f64) -> bool {
+    fn try_add_circle(&mut self, arc0: Arc<K>, arc1: Arc<K>, arc2: Arc<K>, theta: f64) -> bool {
         let p01 = self.arc_point(arc0).position - self.arc_point(arc1).position;
         let p21 = self.arc_point(arc2).position - self.arc_point(arc1).position;
         let cross = p01.cross(p21);
@@ -312,7 +287,7 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
         }
     }
     
-    fn try_remove_circle(&mut self, arc: Arc) -> bool {
+    fn try_remove_circle(&mut self, arc: Arc<K>) -> bool {
         if let Some(event) = self.beach.circle(arc) {
             self.events.set_invalid(event, true);
             self.beach.set_circle(arc, None);
@@ -333,23 +308,11 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
                 };
                 let vertex0 = self.diagram.other_edge_vertex(edge0, vertex).unwrap();
                 let vertex1 = self.diagram.other_edge_vertex(edge1, vertex).unwrap();
-                self.create_edge(vertex0, vertex1);
+                self.diagram.add_edge(Default::default(), vertex0, vertex1);
                 bad_vertices.push(vertex);
             }
         }
         self.diagram.remove_vertices(&bad_vertices);
-    }
-    
-    fn vertex_point(&self, vertex: Vertex) -> &Point {
-        self.diagram.vertex_data(vertex).point()
-    }
-
-    fn vertex_position(&self, vertex: Vertex) -> Point3<f64> {
-        self.diagram.vertex_data(vertex).position()
-    }
-    
-    fn face_position(&self, face: Face) -> Point3<f64> {
-        self.diagram.face_data(face).position()
     }
     
     fn finish_faces(&mut self) {
@@ -369,10 +332,10 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
             self.diagram.set_edge_faces(edge, common[0], common[1]);
         }
         for face in self.diagram.faces() {
-            let n = self.face_position(face);
+            let n = *self.diagram.face_data(face).position();
             let mut edge = self.diagram.face_edges(face)[0];
             let (v0, v1) = self.diagram.edge_vertices(edge);
-            let (prev, v) = if are_clockwise(n, self.vertex_position(v0), self.vertex_position(v1)) {
+            let (prev, v) = if are_clockwise(n, *self.diagram.vertex_data(v0).position(), *self.diagram.vertex_data(v1).position()) {
                 (v0, v1) 
             } else {
                 (v1, v0)
@@ -398,19 +361,17 @@ impl<V, E, F> SphericalVoronoi<V, E, F>
 #[derive(PartialEq)]
 pub enum Error {
     FewPoints,
-    WrongEdgesNum,
-    WrongCommonVerticesNum    
 }
 
-pub fn generate<V, E, F>(points: &[Point]) -> Result<Diagram<V, E, F>, Error>
-    where V: Position, E: Default, F: Position {
-    let voronoi = try!(SphericalVoronoi::new(points));
-    voronoi.build()
+pub fn build<K: Kind>(points: &[Point]) -> Result<Diagram<K>, Error> 
+    where K::Vertex: Position, K::Edge: Default, K::Face: Position {
+    let builder = try!(Builder::new(points));
+    builder.build()
 }
 
-pub fn generate_relaxed<V, E, F>(points: &[Point], relaxations: usize) -> Result<Diagram<V, E, F>, Error>
-    where V: Position, E: Default, F: Position {
-    let mut diagram = try!(generate(points));
+pub fn build_relaxed<K: Kind>(points: &[Point], relaxations: usize) -> Result<Diagram<K>, Error>
+    where K::Vertex: Position, K::Edge: Default, K::Face: Position {
+    let mut diagram = try!(build(points));
     for _ in 0..relaxations {
         let new_points: Vec<_> = diagram.faces().
             map(|face| {
@@ -418,53 +379,14 @@ pub fn generate_relaxed<V, E, F>(points: &[Point], relaxations: usize) -> Result
                     face_vertices(face).
                     iter().
                     map(|&vertex| {
-                        let data: &V = diagram.vertex_data(vertex);
-                        data.position()
-                    }).
-                    collect();
+                        let data: &K::Vertex = diagram.vertex_data(vertex);
+                        *data.position()
+                    }).collect();
                 let p = Point3::centroid(&face_points);
                 Point::from_cartesian(p.x, p.y, p.z)
             }).
             collect();
-        diagram = try!(generate(&new_points));
+        diagram = try!(build(&new_points));
     }
     Ok(diagram)
-}
-
-fn are_clockwise(n: Point3<f64>, v1: Point3<f64>, v2: Point3<f64>) -> bool {
-    (v1 - n).cross(v2 - n).dot(n.to_vec()) < 0.0
-}
-
-fn wrap(phi: f64) -> f64 {
-    if phi > PI {
-        phi - 2.0 * PI
-    } else if phi < -PI {
-        phi + 2.0 * PI
-    } else {
-        phi
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use point::Point;
-
-    #[test]
-    fn zero_points() {
-        assert!(if let Err(Error::FewPoints) = generate::<Point, (), Point>(&vec![]) {
-            true
-        } else {
-            false
-        });
-    }
-    
-    #[test]
-    fn one_point() {
-        assert!(if let Err(Error::FewPoints) = generate::<Point, (), Point>(&vec![Point::from_cartesian(1.0, 0.0, 0.0)]) {
-            true
-        } else {
-            false
-        });
-    }
 }

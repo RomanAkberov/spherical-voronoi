@@ -7,32 +7,34 @@ pub enum Color {
     Black,
 }
 
-struct NodeData<Node: Id, T> {
+pub type Node<T> = Id<NodeData<T>>;
+
+pub struct NodeData<T> {
     value: T,
-    next: Option<Node>,
-    prev: Option<Node>,
-    parent: Option<Node>,
-    left: Option<Node>,
-    right: Option<Node>,
+    next: Option<Node<T>>,
+    prev: Option<Node<T>>,
+    parent: Option<Node<T>>,
+    left: Option<Node<T>>,
+    right: Option<Node<T>>,
     color: Color,
 }
 
-pub struct RedBlackTree<Node: Id, T> {
-    root: Option<Node>,
-    nodes: IdVec<Node, NodeData<Node, T>>,
+pub struct RedBlackTree<T> {
+    root: Option<Node<T>>,
+    nodes: IdVec<NodeData<T>>,
 }
 
-impl<Node: Id, T> Default for RedBlackTree<Node, T> {
+impl<T> Default for RedBlackTree<T> {
     fn default() -> Self {
         RedBlackTree {
             root: None,
-            nodes: IdVec::default(),
+            nodes: Default::default(),
         }
     }
 }
 
-impl<Node: Id, T> RedBlackTree<Node, T> {
-    pub fn root(&self) -> Option<Node> {
+impl<T> RedBlackTree<T> {
+    pub fn root(&self) -> Option<Node<T>> {
         self.root
     }
     
@@ -40,62 +42,62 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
         self.nodes.len()
     }
     
-    pub fn next(&self, node: Node) -> Option<Node> {
+    pub fn next(&self, node: Node<T>) -> Option<Node<T>> {
         self.nodes[node].next
     }
     
-    pub fn prev(&self, node: Node) -> Option<Node> {
+    pub fn prev(&self, node: Node<T>) -> Option<Node<T>> {
         self.nodes[node].prev
     }
     
-    pub fn left(&self, node: Node) -> Option<Node> {
+    pub fn left(&self, node: Node<T>) -> Option<Node<T>> {
         self.nodes[node].left
     }
     
-    pub fn right(&self, node: Node) -> Option<Node> {
+    pub fn right(&self, node: Node<T>) -> Option<Node<T>> {
         self.nodes[node].right
     }
     
-    pub fn parent(&self, node: Node) -> Option<Node> {
+    pub fn parent(&self, node: Node<T>) -> Option<Node<T>> {
         self.nodes[node].parent
     }
     
-    pub fn color(&self, node: Node) -> Color {
+    pub fn color(&self, node: Node<T>) -> Color {
         self.nodes[node].color
     }
     
-    fn set_next(&mut self, node: Node, value: Option<Node>) {
+    fn set_next(&mut self, node: Node<T>, value: Option<Node<T>>) {
         self.nodes[node].next = value;
     }
     
-    fn set_prev(&mut self, node: Node, value: Option<Node>) {
+    fn set_prev(&mut self, node: Node<T>, value: Option<Node<T>>) {
         self.nodes[node].prev = value;
     }
     
-    fn set_left(&mut self, node: Node, value: Option<Node>) {
+    fn set_left(&mut self, node: Node<T>, value: Option<Node<T>>) {
         self.nodes[node].left = value;
     }
     
-    fn set_right(&mut self, node: Node, value: Option<Node>) {
+    fn set_right(&mut self, node: Node<T>, value: Option<Node<T>>) {
         self.nodes[node].right = value;
     }
     
-    fn set_parent(&mut self, node: Node, value: Option<Node>) {
+    fn set_parent(&mut self, node: Node<T>, value: Option<Node<T>>) {
         self.nodes[node].parent = value;
     }
     
-    fn set_color(&mut self, node: Node, value: Color) {
+    fn set_color(&mut self, node: Node<T>, value: Color) {
         self.nodes[node].color = value;
     }
     
-    fn if_red(&self, node: Option<Node>) -> Option<Node> {
+    fn if_red(&self, node: Option<Node<T>>) -> Option<Node<T>> {
         match node {
             Some(node) if self.color(node) == Color::Red => Some(node),
             _ => None,
         }
     }
     
-    pub fn insert_after(&mut self, node: Option<Node>, value: T) -> Node {
+    pub fn insert_after(&mut self, node: Option<Node<T>>, value: T) -> Node<T> {
 	    let successor = self.nodes.push(NodeData {
 	        value: value,
 	        next: None,
@@ -149,9 +151,9 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 				    node = grandpa;
 			    } else {
 				    if Some(node) == self.right(parent) {
-					    let p = self.rotate_left(parent);
+					    self.rotate_left(parent);
 					    node = parent;
-					    parent = p;
+					    parent = self.parent(node).unwrap();
 				    }
 				    self.set_color(parent, Color::Black);
 				    self.set_color(grandpa, Color::Red);
@@ -165,9 +167,9 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 				    node = grandpa;
 				} else {
 				    if Some(node) == self.left(parent) {
-					    let p = self.rotate_right(parent);
+					    self.rotate_right(parent);
 					    node = parent;
-					    parent = p;
+					    parent = self.parent(node).unwrap();
 				    }
     				self.set_color(parent, Color::Black);
     				self.set_color(grandpa, Color::Red);
@@ -181,7 +183,7 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 	    successor
 	}
 
-    pub fn remove(&mut self, node: Node) {
+    pub fn remove(&mut self, node: Node<T>) {
 	    let prev = self.prev(node);
 	    let next = self.next(node);
 	    if let Some(next) = next {
@@ -190,14 +192,10 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 		if let Some(prev) = prev {
 		    self.set_next(prev, next);
 		}
-		//////println!("{:?}, {:?}", prev, next);
-		//self.set_prev(node, None);
-		//self.set_next(node, None);
 		let parent = self.parent(node);
 		let left = self.left(node);
 		let right = self.right(node);
 		let node_color = self.color(node);
-		//self.nodes.remove(node);
 		let next = if let Some(left) = left {
 		    if let Some(right) = right {
 		        Some(self.first(right))
@@ -207,7 +205,6 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 		} else {
 		    right
 		};
-		//////println!("{:?}", next);
 		if let Some(parent) = parent {
 		    if Some(node) == self.left(parent) {
 		        self.set_left(parent, next);
@@ -217,7 +214,6 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 		} else {
 		    self.root = next;
 		}
-		//////println!("{:?}", self.root);
         let node_parent = parent;
 		let color;
 	    let (node, parent) = if let (Some(left), Some(right)) = (left, right) {
@@ -242,7 +238,6 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 	        color = node_color;
 	        (next, parent)
         };
-		////println!("{:?}, {:?}, {:?}, {:?}", node, parent, self.left(parent.unwrap()), self.right(parent.unwrap()));
     	if let Some(node) = node {
     	    self.set_parent(node, parent);
     	}
@@ -260,7 +255,7 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 				break;
 			}
 			let parent = parent_.unwrap();
-    		let mut sibling: Node;
+    		let mut sibling: Node<T>;
 		    if node == self.left(parent) {
 			    sibling = self.right(parent).unwrap();
 			    if self.color(sibling) == Color::Red {
@@ -326,7 +321,7 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 	    }
     }
     
-    pub fn first(&self, node: Node) -> Node {
+    pub fn first(&self, node: Node<T>) -> Node<T> {
         let mut result = node;
         while let Some(left) = self.left(result) {
             result = left;
@@ -334,7 +329,7 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
         result
     }
     
-    pub fn last(&self, node: Node) -> Node {
+    pub fn last(&self, node: Node<T>) -> Node<T> {
         let mut result = node;
         while let Some(left) = self.right(result) {
             result = left;
@@ -342,8 +337,7 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
         result
     }
 
-    fn rotate_left(&mut self, node: Node) -> Node {
-		////println!("LEFT {:?}", self.nodes[&node].value);
+    fn rotate_left(&mut self, node: Node<T>) {
 	    let child = self.right(node).unwrap(); //can't be None
 	    let parent = self.parent(node);
 	    if let Some(parent) = parent {
@@ -363,11 +357,9 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 		    self.set_parent(left, Some(node))
 	    }
 	    self.set_left(child, Some(node));
-	    child
     }
     
-    fn rotate_right(&mut self, node: Node) -> Node {
-		////println!("RIGHT {:?}", self.nodes[&node].value);
+    fn rotate_right(&mut self, node: Node<T>) {
 	    let child = self.left(node).unwrap(); //can't be None
 	    let parent = self.parent(node);
 	    if let Some(parent) = parent {
@@ -387,41 +379,20 @@ impl<Node: Id, T> RedBlackTree<Node, T> {
 		    self.set_parent(right, Some(node))
 	    }
 	    self.set_right(child, Some(node));
-	    child
     }
 }
 
-impl<Node: Id, T> Index<Node> for RedBlackTree<Node, T> {
+impl<T> Index<Node<T>> for RedBlackTree<T> {
     type Output = T;
 
-    fn index(&self, index: Node) -> &Self::Output {
+    fn index(&self, index: Node<T>) -> &Self::Output {
         &self.nodes[index].value
     }
 }
 
-impl<Node: Id, T> IndexMut<Node> for RedBlackTree<Node, T> {
-    fn index_mut(&mut self, index: Node) -> &mut Self::Output {
+impl<T> IndexMut<Node<T>> for RedBlackTree<T> {
+    fn index_mut(&mut self, index: Node<T>) -> &mut Self::Output {
         &mut self.nodes[index].value
     }
-}
-
-
-impl<Node: Id, T> RedBlackTree<Node, T> {
-	pub fn dump(&self) {
-		self.dump_node(self.root, 0);
-	}
-
-	fn dump_node(&self, node: Option<Node>, indent: usize) {
-		for _ in 0..indent {
-			print!("-");
-		}
-		if let Some(node) = node {
-			println!("{:?} - {:?}", node, self.color(node));
-			self.dump_node(self.left(node), indent + 1);
-			self.dump_node(self.right(node), indent + 1);
-		} else {
-			println!("Nil");
-		}
-	}
 }
 
