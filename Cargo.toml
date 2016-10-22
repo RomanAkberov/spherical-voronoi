@@ -5,5 +5,5 @@ authors = ["Roman Akberov <r.k.akberov@gmail.com>"]
 
 [dependencies]
 cgmath = "*"
-diagram = {path = "../diagram"}
-id = {path = "../id"}
+diagram = {git = "https://github.com/RomanAkberov/diagram"}
+id = {git = "https://github.com/RomanAkberov/id"}
