@@ -9,5 +9,5 @@ mod voronoi;
 mod point;
 
 pub use point::Point;
-pub use diagram::{Diagram, Kind, Vertex, Edge, Face, VertexIter, EdgeIter, FaceIter};
+pub use diagram::*;
 pub use voronoi::{Position, Error, build, build_relaxed};

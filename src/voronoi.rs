@@ -302,9 +302,11 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         for vertex in self.diagram.vertices() {
             if self.diagram.vertex_faces(vertex).len() == 2 {
                 let (edge0, edge1) = {
-                    let edges = self.diagram.vertex_edges(vertex);
+                    let mut edges = self.diagram.vertex_edges(vertex);
                     assert_eq!(edges.len(), 2);
-                    (edges[0], edges[1])
+                    let edge0 = edges.next().unwrap();
+                    let edge1 = edges.next().unwrap();
+                    (edge0, edge1)
                 };
                 let vertex0 = self.diagram.other_edge_vertex(edge0, vertex).unwrap();
                 let vertex1 = self.diagram.other_edge_vertex(edge1, vertex).unwrap();
@@ -322,7 +324,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
             for face0 in self.diagram.vertex_faces(vertex0) {
                 for face1 in self.diagram.vertex_faces(vertex1) {
                     if face0 == face1 {
-                        common.push(*face0);
+                        common.push(face0);
                     }
                 }
             }
@@ -333,7 +335,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         }
         for face in self.diagram.faces() {
             let n = *self.diagram.face_data(face).position();
-            let mut edge = self.diagram.face_edges(face)[0];
+            let mut edge = self.diagram.face_edges(face).next().unwrap();
             let (v0, v1) = self.diagram.edge_vertices(edge);
             let (prev, v) = if are_clockwise(n, *self.diagram[v0].position(), *self.diagram[v1].position()) {
                 (v0, v1) 
@@ -344,7 +346,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
             let mut vertex = v;
             for _ in 0..self.diagram.face_edges(face).len() - 1 {
                 self.diagram.add_face_vertex(face, vertex);
-                for &e in self.diagram.face_edges(face) {
+                for e in self.diagram.face_edges(face) {
                     if e != edge {
                         if let Some(v) = self.diagram.other_edge_vertex(e, vertex) {
                             vertex = v;
@@ -377,8 +379,7 @@ pub fn build_relaxed<K: Kind>(points: &[Point], relaxations: usize) -> Result<Di
             map(|face| {
                 let face_points: Vec<_> = diagram.
                     face_vertices(face).
-                    iter().
-                    map(|&vertex| {
+                    map(|vertex| {
                         let data: &K::Vertex = &diagram[vertex];
                         *data.position()
                     }).collect();
