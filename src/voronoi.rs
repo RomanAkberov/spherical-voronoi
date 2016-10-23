@@ -100,7 +100,9 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
     }
     
     fn create_edge(&mut self, vertex0: Vertex<K>, vertex1: Vertex<K>) -> Edge<K> {
-        self.diagram.add_edge(Default::default(), vertex0, vertex1)
+        let edge = self.diagram.add_edge(Default::default());
+        self.diagram.set_edge_vertices(edge, vertex0, vertex1);
+        edge
     }
 
     fn site_event(&mut self, face: Face<K>, point: Point) {
@@ -301,16 +303,12 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         let mut bad_vertices = Vec::new();
         for vertex in self.diagram.vertices() {
             if self.diagram.vertex_faces(vertex).len() == 2 {
-                let (edge0, edge1) = {
-                    let mut edges = self.diagram.vertex_edges(vertex);
-                    assert_eq!(edges.len(), 2);
-                    let edge0 = edges.next().unwrap();
-                    let edge1 = edges.next().unwrap();
-                    (edge0, edge1)
+                let (vertex0, vertex1) = {
+                    let neighbors: Vec<_> = self.diagram.vertex_neighbors(vertex).collect();
+                    assert_eq!(neighbors.len(), 2);
+                    (neighbors[0], neighbors[1])
                 };
-                let vertex0 = self.diagram.other_edge_vertex(edge0, vertex).unwrap();
-                let vertex1 = self.diagram.other_edge_vertex(edge1, vertex).unwrap();
-                self.diagram.add_edge(Default::default(), vertex0, vertex1);
+                self.create_edge(vertex0, vertex1);
                 bad_vertices.push(vertex);
             }
         }
@@ -329,8 +327,6 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                 }
             }
             assert_eq!(common.len(), 2);
-            self.diagram.add_face_edge(common[0], edge);
-            self.diagram.add_face_edge(common[1], edge);
             self.diagram.set_edge_faces(edge, common[0], common[1]);
         }
         for face in self.diagram.faces() {
