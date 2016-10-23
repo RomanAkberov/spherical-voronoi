@@ -335,7 +335,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
             let n = *self.diagram.face_data(face).position();
             let mut edge = self.diagram.face_edges(face)[0];
             let (v0, v1) = self.diagram.edge_vertices(edge);
-            let (prev, v) = if are_clockwise(n, *self.diagram.vertex_data(v0).position(), *self.diagram.vertex_data(v1).position()) {
+            let (prev, v) = if are_clockwise(n, *self.diagram[v0].position(), *self.diagram[v1].position()) {
                 (v0, v1) 
             } else {
                 (v1, v0)
@@ -379,7 +379,7 @@ pub fn build_relaxed<K: Kind>(points: &[Point], relaxations: usize) -> Result<Di
                     face_vertices(face).
                     iter().
                     map(|&vertex| {
-                        let data: &K::Vertex = diagram.vertex_data(vertex);
+                        let data: &K::Vertex = &diagram[vertex];
                         *data.position()
                     }).collect();
                 let p = Point3::centroid(&face_points);
