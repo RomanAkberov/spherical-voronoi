@@ -303,17 +303,13 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         let mut bad_vertices = Vec::new();
         for vertex in self.diagram.vertices() {
             let num_faces = self.diagram.vertex_faces(vertex).len();
-            if num_faces < 3 {
-                if num_faces == 2 {
-                    let (vertex0, vertex1) = {
-                        let neighbors: Vec<_> = self.diagram.vertex_neighbors(vertex).collect();
-                        assert_eq!(neighbors.len(), 2);
-                        (neighbors[0], neighbors[1])
-                    };
-                    self.create_edge(vertex0, vertex1);
-                } else {
-                    assert_eq!(num_faces, 0);
-                }
+            if num_faces == 2 {
+                let (vertex0, vertex1) = {
+                    let neighbors: Vec<_> = self.diagram.vertex_neighbors(vertex).collect();
+                    assert_eq!(neighbors.len(), 2);
+                    (neighbors[0], neighbors[1])
+                };
+                self.create_edge(vertex0, vertex1);
                 bad_vertices.push(vertex);
             }
         }
