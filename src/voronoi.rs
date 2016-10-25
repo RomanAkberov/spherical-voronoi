@@ -302,8 +302,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
     fn cleanup_vertices(&mut self) {
         let mut bad_vertices = Vec::new();
         for vertex in self.diagram.vertices() {
-            let num_faces = self.diagram.vertex_faces(vertex).len();
-            if num_faces == 2 {
+            if self.diagram.vertex_faces(vertex).len() == 2 {
                 let (vertex0, vertex1) = {
                     let neighbors: Vec<_> = self.diagram.vertex_neighbors(vertex).collect();
                     assert_eq!(neighbors.len(), 2);
