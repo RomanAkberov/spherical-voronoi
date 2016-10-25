@@ -6,4 +6,4 @@ authors = ["Roman Akberov <r.k.akberov@gmail.com>"]
 [dependencies]
 cgmath = "*"
 diagram = {git = "https://github.com/RomanAkberov/diagram"}
-id = {git = "https://github.com/RomanAkberov/id"}
+ideal = {git = "https://github.com/RomanAkberov/ideal"}

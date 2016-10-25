@@ -1,6 +1,6 @@
 extern crate cgmath;
 extern crate diagram;
-extern crate id;
+extern crate ideal;
 
 mod events;
 mod beach;

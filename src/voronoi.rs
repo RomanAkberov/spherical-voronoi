@@ -324,6 +324,8 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         for edge in self.diagram.edges() {
             let mut common = Vec::new(); 
             let (vertex0, vertex1) = self.diagram.edge_vertices(edge);
+            self.diagram.add_vertex_edge(vertex0, edge);
+            self.diagram.add_vertex_edge(vertex1, edge);    
             for face0 in self.diagram.vertex_faces(vertex0) {
                 for face1 in self.diagram.vertex_faces(vertex1) {
                     if face0 == face1 {

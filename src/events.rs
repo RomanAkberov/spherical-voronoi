@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use point::Point;
 use beach::Arc;
-use id::{Id, IdVec};
+use ideal::{Id, IdVec};
 use diagram::{Kind, Face};
 
 pub struct CircleData<K: Kind> {
