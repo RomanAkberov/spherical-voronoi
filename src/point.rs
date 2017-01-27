@@ -7,7 +7,6 @@ use angle::Angle;
 pub struct Point {
     pub theta: Angle,
     pub phi: Angle,
-    pub position: Point3<f64>,
 }
 
 impl Point {
@@ -15,34 +14,33 @@ impl Point {
         let position = Point3::from_vec(Vector3::new(x, y, z).normalize());
         let (theta, phi) = (position.z.acos(), position.y.atan2(position.x));
         Point {
-            theta: theta.into(),
-            phi: phi.into(),
-            position: position
+            theta: Angle::from(theta),
+            phi: Angle::from(phi),
         }
     }
     
-    pub fn from_cache(theta: Angle, phi: Angle) -> Self {
+    pub fn from_angles(theta: Angle, phi: Angle) -> Self {
         Point {
             theta: theta,
             phi: phi,
-            position: Point3::new(theta.sin() * phi.cos(), theta.sin() * phi.sin(), theta.cos()),
         }
-    }
-
-    pub fn from_spherical(theta: f64, phi: f64) -> Self {
-        Point::from_cache(theta.into(), phi.into())
     }
     
     pub fn distance(&self, other: &Self) -> f64 {
-        self.position.dot(other.position.to_vec()).acos()
+        self.position().dot(other.position().to_vec()).acos()
     }
     
-    pub fn x(&self) -> f64 { self.position.x }
-    pub fn y(&self) -> f64 { self.position.y }
-    pub fn z(&self) -> f64 { self.position.z }
+    pub fn position(&self) -> Point3<f64> {
+        Point3::new(self.theta.sin() * self.phi.cos(), self.theta.sin() * self.phi.sin(), self.theta.cos())
+    }
 
-    pub fn phi(&self) -> f64 { self.phi.value() }
-    pub fn theta(&self) -> f64 { self.theta.value() }
+    pub fn phi(&self) -> &Angle { 
+        &self.phi
+    }
+    
+    pub fn theta(&self) -> &Angle {
+        &self.theta
+    }
 }
 
 impl PartialOrd for Point {
@@ -70,6 +68,7 @@ impl PartialEq for Point {
 
 impl fmt::Debug for Point {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({:.5}, {:.5}, {:.5})", self.x(), self.y(), self.z())
+        let position = self.position();
+        write!(f, "({:.5}, {:.5}, {:.5})", position.x, position.y, position.z)
     }
 }

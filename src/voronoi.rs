@@ -10,28 +10,8 @@ use diagram::{Diagram, Kind, Vertex, Edge, Face};
 pub trait Position : From<Point> {
     fn point(&self) -> &Point;
 
-    fn position(&self) -> &Point3<f64> {
-        &self.point().position
-    }
-}
-
-fn in_range(phi: f64, phi_start: f64, phi_end: f64) -> Ordering {
-    if phi_start <= phi_end {
-        if phi < phi_start {
-            Ordering::Less
-        } else if phi > phi_end {
-            Ordering::Greater
-        } else {
-            Ordering::Equal
-        }
-    } else {
-        if phi < phi_end || phi > phi_start {
-            Ordering::Equal
-        } else if phi >= phi_end {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }
+    fn position(&self) -> Point3<f64> {
+        self.point().position()
     }
 }
 
@@ -124,7 +104,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                 let next_arc = self.beach.next(arc);
                 let phi_start = self.arcs_intersection(prev_arc, arc);
                 let phi_end = self.arcs_intersection(arc, next_arc);
-                match in_range(point.phi(), phi_start, phi_end) {
+                match point.phi().is_in_range(phi_start, phi_end) {
                     Ordering::Less => {
                         if use_tree {
                             if let Some(left) = self.beach.left(arc) {
@@ -168,8 +148,8 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                         let vertex = self.create_vertex(point, &faces);
                         self.beach.set_start(arc2, Some(vertex));
                         self.beach.set_start(new_arc, Some(vertex));
-                        self.try_add_circle(prev_arc, arc2, new_arc, point.theta());
-                        self.try_add_circle(new_arc, arc, next_arc, point.theta());
+                        self.try_add_circle(prev_arc, arc2, new_arc, point.theta().value());
+                        self.try_add_circle(new_arc, arc, next_arc, point.theta().value());
                         if self.try_remove_circle(prev_arc) {
                             let prev_prev = self.beach.prev(prev_arc);
                             self.try_add_circle(prev_prev, prev_arc, arc2, -2.0 * PI);
@@ -262,24 +242,26 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
     
     fn phi_to_point(&self, phi: Angle, point: &Point) -> Point {
         let phi = phi.wrapped();
-        if point.theta() >= self.scan_theta.value() {
-            Point::from_cache(self.scan_theta, phi) // could be any point on the line segment
+        if point.theta() >= &self.scan_theta {
+            Point::from_angles(self.scan_theta, phi) // could be any point on the line segment
         } else {
-            let a = self.scan_theta.sin() - point.theta.sin() * (phi.value() - point.phi()).cos();
+            let a = self.scan_theta.sin() - point.theta.sin() * (phi.value() - point.phi().value()).cos();
             let b = point.theta.cos() - self.scan_theta.cos();
             let theta = Angle::from(b.atan2(a));
-            Point::from_cache(theta, phi)
+            Point::from_angles(theta, phi)
         }
     }
     
-    fn try_add_circle(&mut self, arc0: Arc<K>, arc1: Arc<K>, arc2: Arc<K>, theta: f64) -> bool {
-        let p01 = self.arc_point(arc0).position - self.arc_point(arc1).position;
-        let p21 = self.arc_point(arc2).position - self.arc_point(arc1).position;
+    fn try_add_circle(&mut self, arc0: Arc<K>, arc1: Arc<K>, arc2: Arc<K>, min_theta: f64) -> bool {
+        let p1 = self.arc_point(arc1).position();
+        let p01 = self.arc_point(arc0).position() - p1;
+        let p21 = self.arc_point(arc2).position() - p1;
         let cross = p01.cross(p21);
         let center = Point::from_cartesian(cross.x, cross.y, cross.z);
         let radius = center.distance(&self.arc_point(arc0)); 
-        let point = Point::from_spherical(center.theta() + radius, center.phi());
-        if point.theta() >= theta {
+        let theta = center.theta().value() + radius;
+        if theta >= min_theta {
+            let point = Point::from_angles(Angle::from(theta), center.phi().clone());
             let circle = self.events.add_circle((arc0, arc1, arc2), center, radius, point);
             self.beach.set_circle(arc1, Some(circle));
             true
@@ -329,10 +311,10 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
             self.diagram.set_edge_faces(edge, common[0], common[1]);
         }
         for face in self.diagram.faces() {
-            let n = *self.diagram.face_data(face).position();
+            let n = self.diagram.face_data(face).position();
             let mut edge = self.diagram.face_edges(face).next().unwrap();
             let (v0, v1) = self.diagram.edge_vertices(edge);
-            let (prev, v) = if are_clockwise(n, *self.diagram[v0].position(), *self.diagram[v1].position()) {
+            let (prev, v) = if are_clockwise(n, self.diagram[v0].position(), self.diagram[v1].position()) {
                 (v0, v1) 
             } else {
                 (v1, v0)
@@ -380,7 +362,7 @@ pub fn build_relaxed<K: Kind>(points: &[Point], relaxations: usize) -> Result<Di
                     face_vertices(face).
                     map(|vertex| {
                         let data: &K::Vertex = &diagram[vertex];
-                        *data.position()
+                        data.position()
                     }).collect();
                 let p = Point3::centroid(&face_points);
                 Point::from_cartesian(p.x, p.y, p.z)

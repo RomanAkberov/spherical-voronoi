@@ -1,4 +1,5 @@
 use std::f64::consts::PI;
+use std::cmp::Ordering;
 
 #[derive(Copy, Clone)]
 pub struct Angle {
@@ -32,13 +33,13 @@ impl Angle {
         }
     }
 
-    pub fn is_in_range(&self, start: f64, end: f64) -> i32 {
+    pub fn is_in_range(&self, start: f64, end: f64) -> Ordering {
         if self.is_between(start, end) {
-            0
+            Ordering::Equal
         } else if Angle::wrap(self.value - end).abs() < Angle::wrap(self.value - start).abs() {
-            1
+            Ordering::Greater
         } else {
-            -1
+            Ordering::Less
         }
     }
 
@@ -60,5 +61,17 @@ impl From<f64> for Angle {
             sin: value.sin(),
             cos: value.cos(),
         }
+    }
+}
+
+impl PartialEq for Angle {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl PartialOrd for Angle {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.value.partial_cmp(&other.value)
     }
 }
