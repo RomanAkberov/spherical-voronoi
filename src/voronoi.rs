@@ -1,8 +1,8 @@
 use std::f64::consts::PI;
 use std::cmp::Ordering;
-use cgmath::prelude::*;
-use cgmath::Point3;
-use point::{Point, SinCosCache};
+use cgmath::{Point3, InnerSpace, EuclideanSpace};
+use angle::Angle;
+use point::Point;
 use events::{Events, EventKind, Circle};
 use beach::{Beach, Arc};
 use diagram::{Diagram, Kind, Vertex, Edge, Face};
@@ -53,7 +53,7 @@ struct Builder<K: Kind> where K::Vertex: Position, K::Edge: Default, K::Face: Po
     events: Events<K>,
     beach: Beach<K>,
     diagram: Diagram<K>,
-    scan_theta: SinCosCache,
+    scan_theta: Angle,
 }
         
 impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: Position {
@@ -186,7 +186,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
     fn merge_arcs(&mut self, arc0: Arc<K>, arc1: Arc<K>, arc2: Arc<K>, vertex: Option<Vertex<K>>) {
         let (face0, face1, face2) = (self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2));
         if face0 != face1 && face1 != face2 && face2 != face0 {
-            let theta = self.scan_theta.value;
+            let theta = self.scan_theta.value();
             if self.try_add_circle(arc0, arc1, arc2, theta) {
                 if vertex.is_some() {
                     self.beach.set_start(arc1, vertex);
@@ -235,20 +235,20 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         let phi0 = point0.phi;
         let theta1 = point1.theta;
         let phi1 = point1.phi;
-        if theta0.value >= self.scan_theta.value {
-            point0.phi.value
-        } else if theta1.value >= self.scan_theta.value {
-            point1.phi.value
+        if theta0.value() >= self.scan_theta.value() {
+            point0.phi.value()
+        } else if theta1.value() >= self.scan_theta.value() {
+            point1.phi.value()
         } else {
-            let u1 = (self.scan_theta.cos - theta1.cos) * theta0.sin;
-            let u2 = (self.scan_theta.cos - theta0.cos) * theta1.sin;
-            let a1 = u1 * phi0.cos;
-            let a2 = u2 * phi1.cos;
+            let u1 = (self.scan_theta.cos() - theta1.cos()) * theta0.sin();
+            let u2 = (self.scan_theta.cos() - theta0.cos()) * theta1.sin();
+            let a1 = u1 * phi0.cos();
+            let a2 = u2 * phi1.cos();
             let a = a1 - a2;
-            let b1 = u1 * phi0.sin;
-            let b2 = u2 * phi1.sin;
+            let b1 = u1 * phi0.sin();
+            let b2 = u2 * phi1.sin();
             let b = b1 - b2;
-            let c = (theta0.cos - theta1.cos) * self.scan_theta.sin;
+            let c = (theta0.cos() - theta1.cos()) * self.scan_theta.sin();
             let length = (a * a + b * b).sqrt();
             if a.abs() > length || c.abs() > length {
                 unreachable!()
@@ -260,15 +260,14 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         }
     }
     
-    fn phi_to_point(&self, phi: SinCosCache, point: &Point) -> Point {
-        let mut phi = phi;
-        phi.value = wrap(phi.value);
-        if point.theta() >= self.scan_theta.value {
+    fn phi_to_point(&self, phi: Angle, point: &Point) -> Point {
+        let phi = phi.wrapped();
+        if point.theta() >= self.scan_theta.value() {
             Point::from_cache(self.scan_theta, phi) // could be any point on the line segment
         } else {
-            let a = self.scan_theta.sin - point.theta.sin * (phi.value - point.phi()).cos();
-            let b = point.theta.cos - self.scan_theta.cos;
-            let theta = SinCosCache::from(b.atan2(a));
+            let a = self.scan_theta.sin() - point.theta.sin() * (phi.value() - point.phi()).cos();
+            let b = point.theta.cos() - self.scan_theta.cos();
+            let theta = Angle::from(b.atan2(a));
             Point::from_cache(theta, phi)
         }
     }

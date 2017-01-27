@@ -1,30 +1,12 @@
 use std::cmp::Ordering;
 use std::fmt;
-use cgmath::prelude::*;
-use cgmath::{Vector3, Point3};
-
-#[derive(Copy, Clone)]
-pub struct SinCosCache {
-    pub value: f64,
-    pub sin: f64,
-    pub cos: f64,
-}
-
-impl From<f64> for SinCosCache {
-    fn from(value: f64) -> Self {
-        let (sin, cos) = value.sin_cos();
-        SinCosCache {
-            value: value,
-            sin: sin,
-            cos: cos,
-        }
-    }
-}
+use cgmath::{Vector3, Point3, InnerSpace, EuclideanSpace};
+use angle::Angle;
 
 #[derive(Copy, Clone)]
 pub struct Point {
-    pub theta: SinCosCache,
-    pub phi: SinCosCache,
+    pub theta: Angle,
+    pub phi: Angle,
     pub position: Point3<f64>,
 }
 
@@ -39,11 +21,11 @@ impl Point {
         }
     }
     
-    pub fn from_cache(theta: SinCosCache, phi: SinCosCache) -> Self {
+    pub fn from_cache(theta: Angle, phi: Angle) -> Self {
         Point {
             theta: theta,
             phi: phi,
-            position: Point3::new(theta.sin * phi.cos, theta.sin * phi.sin, theta.cos),
+            position: Point3::new(theta.sin() * phi.cos(), theta.sin() * phi.sin(), theta.cos()),
         }
     }
 
@@ -59,8 +41,8 @@ impl Point {
     pub fn y(&self) -> f64 { self.position.y }
     pub fn z(&self) -> f64 { self.position.z }
 
-    pub fn phi(&self) -> f64 { self.phi.value }
-    pub fn theta(&self) -> f64 { self.theta.value }
+    pub fn phi(&self) -> f64 { self.phi.value() }
+    pub fn theta(&self) -> f64 { self.theta.value() }
 }
 
 impl PartialOrd for Point {

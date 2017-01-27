@@ -2,6 +2,7 @@ extern crate cgmath;
 extern crate diagram;
 extern crate ideal;
 
+mod angle;
 mod events;
 mod beach;
 mod red_black_tree;
