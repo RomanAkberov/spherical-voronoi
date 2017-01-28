@@ -30,8 +30,8 @@ fn wrap(phi: f64) -> f64 {
 }
 
 struct Builder<K: Kind> where K::Vertex: Position, K::Edge: Default, K::Face: Position {
-    events: Events<K>,
-    beach: Beach<K>,
+    events: Events,
+    beach: Beach,
     diagram: Diagram<K>,
     scan_theta: Angle,
 }
@@ -49,7 +49,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         };
         for &point in points {
             let face = builder.diagram.add_face(point.into());
-            builder.events.add_site(face, point);
+            builder.events.add_site(face.index(), point);
         }
         Ok(builder)
     }
@@ -58,7 +58,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         while let Some(event) = self.events.pop() {
             self.scan_theta = event.point.theta;
             match event.kind {
-                EventKind::Site(face) => self.site_event(face, event.point),
+                EventKind::Site(index) => self.site_event(Face::from(index), event.point),
                 EventKind::Circle(event) => self.circle_event(event),
             }
         }
@@ -67,8 +67,8 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         Ok(self.diagram)
     }
   
-    fn arc_point(&self, arc: Arc<K>) -> &Point {
-        &self.diagram.face_data(self.beach.face(arc)).point()
+    fn arc_point(&self, arc: Arc) -> &Point {
+        &self.diagram.face_data(Face::from(self.beach.face(arc))).point()
     }
     
     fn create_vertex(&mut self, point: Point, faces: &[Face<K>]) -> Vertex<K> {
@@ -88,14 +88,14 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
     fn site_event(&mut self, face: Face<K>, point: Point) {
         if let Some(mut arc) = self.beach.root() {
             if self.beach.len() == 1 {
-                self.beach.insert_after(Some(arc), face);
+                self.beach.insert_after(Some(arc), face.index());
                 let arc0 = self.beach.first();
                 let arc1 = self.beach.last();
                 let point = self.phi_to_point(point.phi, self.arc_point(arc0));
-                let faces = [face, self.beach.face(arc0)];
+                let faces = [face, Face::from(self.beach.face(arc0))];
                 let vertex = self.create_vertex(point, &faces);
-                self.beach.set_start(arc0, Some(vertex));
-                self.beach.set_start(arc1, Some(vertex));
+                self.beach.set_start(arc0, vertex.index());
+                self.beach.set_start(arc1, vertex.index());
                 return;
             }
             let mut use_tree = true;
@@ -142,12 +142,12 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                             };
                             self.beach.insert_after(a, face)
                         };
-                        let new_arc = self.beach.insert_after(Some(arc2), face);
+                        let new_arc = self.beach.insert_after(Some(arc2), face.index());
                         let point = self.phi_to_point(point.phi, self.arc_point(arc));
-                        let faces = [face, self.beach.face(arc)];
+                        let faces = [face, Face::from(self.beach.face(arc))];
                         let vertex = self.create_vertex(point, &faces);
-                        self.beach.set_start(arc2, Some(vertex));
-                        self.beach.set_start(new_arc, Some(vertex));
+                        self.beach.set_start(arc2, vertex.index());
+                        self.beach.set_start(new_arc, vertex.index());
                         self.try_add_circle(prev_arc, arc2, new_arc, point.theta().value());
                         self.try_add_circle(new_arc, arc, next_arc, point.theta().value());
                         if self.try_remove_circle(prev_arc) {
@@ -159,29 +159,29 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                 }
             }
         } else {
-            self.beach.insert_after(None, face);
+            self.beach.insert_after(None, face.index());
         }
     }
     
-    fn merge_arcs(&mut self, arc0: Arc<K>, arc1: Arc<K>, arc2: Arc<K>, vertex: Option<Vertex<K>>) {
+    fn merge_arcs(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, vertex: Option<Vertex<K>>) {
         let (face0, face1, face2) = (self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2));
         if face0 != face1 && face1 != face2 && face2 != face0 {
             let theta = self.scan_theta.value();
             if self.try_add_circle(arc0, arc1, arc2, theta) {
-                if vertex.is_some() {
-                    self.beach.set_start(arc1, vertex);
+                if let Some(vertex) = vertex {
+                    self.beach.set_start(arc1, vertex.index());
                 }
             }
         }
     }
     
-    fn edge_from_arc(&mut self, arc: Arc<K>, vertex: Vertex<K>) {
+    fn edge_from_arc(&mut self, arc: Arc, vertex: Vertex<K>) {
         if let Some(start) = self.beach.start(arc) {
-            self.create_edge(start, vertex);
+            self.create_edge(Vertex::from(start), vertex);
         }    
     }
     
-    fn circle_event(&mut self, event: Circle<K>) {
+    fn circle_event(&mut self, event: Circle) {
         if self.events.is_invalid(event) {
             return;
         }
@@ -190,7 +190,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         self.beach.set_circle(arc1, None);
         self.try_remove_circle(arc0);
         self.try_remove_circle(arc2);
-        let faces = [self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2)];
+        let faces = [Face::from(self.beach.face(arc0)), Face::from(self.beach.face(arc1)), Face::from(self.beach.face(arc2))];
         let point = self.events.center(event);
         let vertex = self.create_vertex(point, &faces);
         self.edge_from_arc(arc0, vertex);
@@ -208,7 +208,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         }
     }
     
-    fn arcs_intersection(&mut self, arc0: Arc<K>, arc1: Arc<K>) -> f64 {
+    fn arcs_intersection(&mut self, arc0: Arc, arc1: Arc) -> f64 {
         let point0 = self.arc_point(arc0);
         let point1 = self.arc_point(arc1);       
         let theta0 = point0.theta;
@@ -252,7 +252,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         }
     }
     
-    fn try_add_circle(&mut self, arc0: Arc<K>, arc1: Arc<K>, arc2: Arc<K>, min_theta: f64) -> bool {
+    fn try_add_circle(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, min_theta: f64) -> bool {
         let p1 = self.arc_point(arc1).position();
         let p01 = self.arc_point(arc0).position() - p1;
         let p21 = self.arc_point(arc2).position() - p1;
@@ -270,7 +270,7 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         }
     }
     
-    fn try_remove_circle(&mut self, arc: Arc<K>) -> bool {
+    fn try_remove_circle(&mut self, arc: Arc) -> bool {
         if let Some(event) = self.beach.circle(arc) {
             self.events.set_invalid(event, true);
             self.beach.set_circle(arc, None);

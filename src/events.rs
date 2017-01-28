@@ -3,57 +3,56 @@ use std::collections::BinaryHeap;
 use point::Point;
 use beach::Arc;
 use ideal::{Id, IdVec};
-use diagram::{Kind, Face};
 
-pub struct CircleData<K: Kind> {
-    pub arcs: (Arc<K>, Arc<K>, Arc<K>),
+pub struct CircleData {
+    pub arcs: (Arc, Arc, Arc),
     pub center: Point,
     pub radius: f64,
     pub is_invalid: bool,
 }
-pub type Circle<K> = Id<CircleData<K>>;
+pub type Circle = Id<CircleData>;
 
-pub enum EventKind<K: Kind> {
-    Circle(Circle<K>),
-    Site(Face<K>),
+pub enum EventKind {
+    Circle(Circle),
+    Site(usize),
 }
 
-pub struct Event<K: Kind> {
+pub struct Event {
     pub point: Point,
-    pub kind: EventKind<K>,    
+    pub kind: EventKind,    
 }
 
-impl<K: Kind> PartialOrd for Event<K> {
+impl PartialOrd for Event {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         other.point.partial_cmp(&self.point)
     }
 }
 
-impl<K: Kind> Ord for Event<K> {
+impl Ord for Event {
     fn cmp(&self, other: &Self) -> Ordering {
         other.point.cmp(&self.point)
     }
 }
 
-impl<K: Kind> PartialEq for Event<K> {
+impl PartialEq for Event {
     fn eq(&self, other: &Self) -> bool {
         self.point == other.point
     }
 }
 
-impl<K: Kind> Eq for Event<K> {}
+impl Eq for Event {}
 
-pub struct Events<K: Kind> {
-    circles: IdVec<CircleData<K>>,
-    heap: BinaryHeap<Event<K>>,
+pub struct Events {
+    circles: IdVec<CircleData>,
+    heap: BinaryHeap<Event>,
 }
 
-impl<K: Kind> Events<K> {
-    pub fn add_site(&mut self, face: Face<K>, point: Point) {
+impl Events {
+    pub fn add_site(&mut self, face: usize, point: Point) {
         self.heap.push(Event { point: point, kind: EventKind::Site(face) });
     }
     
-    pub fn add_circle(&mut self, arcs: (Arc<K>, Arc<K>, Arc<K>), center: Point, radius: f64, point: Point) -> Circle<K> {
+    pub fn add_circle(&mut self, arcs: (Arc, Arc, Arc), center: Point, radius: f64, point: Point) -> Circle {
         let circle = self.circles.push(CircleData {
             arcs: arcs,
             center: center,
@@ -64,28 +63,28 @@ impl<K: Kind> Events<K> {
         circle    
     }
     
-    pub fn pop(&mut self) -> Option<Event<K>> {
+    pub fn pop(&mut self) -> Option<Event> {
         self.heap.pop()
     }
     
-    pub fn is_invalid(&self, event: Circle<K>) -> bool {
+    pub fn is_invalid(&self, event: Circle) -> bool {
         self.circles[event].is_invalid
     }
     
-    pub fn set_invalid(&mut self, event: Circle<K>, is_invalid: bool) {
+    pub fn set_invalid(&mut self, event: Circle, is_invalid: bool) {
         self.circles[event].is_invalid = is_invalid;
     }
     
-    pub fn arcs(&self, event: Circle<K>) -> (Arc<K>, Arc<K>, Arc<K>) {
+    pub fn arcs(&self, event: Circle) -> (Arc, Arc, Arc) {
         self.circles[event].arcs
     }
     
-    pub fn center(&self, event: Circle<K>) -> Point {
+    pub fn center(&self, event: Circle) -> Point {
         self.circles[event].center
     }
 }
 
-impl<K: Kind> Default for Events<K> {
+impl Default for Events {
     fn default() -> Self {
         Events {
             circles: Default::default(),
