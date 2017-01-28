@@ -337,15 +337,9 @@ pub enum Error {
     FewPoints,
 }
 
-pub fn build<K: Kind>(points: &[Point]) -> Result<Diagram<K>, Error> 
+pub fn build<K: Kind>(points: &[Point], relaxations: usize) -> Result<Diagram<K>, Error>
     where K::Vertex: Position, K::Edge: Default, K::Face: Position {
-    let builder = try!(Builder::new(points));
-    builder.build()
-}
-
-pub fn build_relaxed<K: Kind>(points: &[Point], relaxations: usize) -> Result<Diagram<K>, Error>
-    where K::Vertex: Position, K::Edge: Default, K::Face: Position {
-    let mut diagram = try!(build(points));
+    let mut diagram = Builder::new(points)?.build()?;
     for _ in 0..relaxations {
         let new_points: Vec<_> = diagram.faces().
             map(|face| {
@@ -359,7 +353,7 @@ pub fn build_relaxed<K: Kind>(points: &[Point], relaxations: usize) -> Result<Di
                 Point::from_cartesian(p.x, p.y, p.z)
             }).
             collect();
-        diagram = try!(build(&new_points));
+        diagram = Builder::new(&new_points)?.build()?;
     }
     Ok(diagram)
 }
