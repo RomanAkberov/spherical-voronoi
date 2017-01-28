@@ -21,7 +21,7 @@ impl Angle {
         }
     }
 
-    pub fn wrapped(&self) -> Angle {
+    pub fn wrapped(&self) -> Self {
         Angle::new(Angle::wrap(self.value), self.sin, self.cos)
     }
 

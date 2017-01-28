@@ -5,8 +5,8 @@ use angle::Angle;
 
 #[derive(Copy, Clone)]
 pub struct Point {
-    pub theta: Angle,
-    pub phi: Angle,
+    theta: Angle,
+    phi: Angle,
 }
 
 impl Point {
