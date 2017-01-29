@@ -1,5 +1,7 @@
 use ideal::{Id, IdVec};
 use ideal::vec::IdsIter;
+use point::Point;
+use cgmath::{Point3, EuclideanSpace};
 
 pub struct VertexData {
     point: Point,
@@ -42,6 +44,10 @@ impl Diagram {
         self.vertices.ids()
     }
 
+    pub fn clear_vertices(&mut self) {
+        self.vertices.clear()
+    }
+
     pub fn vertex_point(&self, vertex: Vertex) -> &Point {
         &self.vertices[vertex].point
     }
@@ -70,6 +76,10 @@ impl Diagram {
 
     pub fn edges(&self) -> IdsIter<EdgeData> {
         self.edges.ids()
+    }
+
+    pub fn clear_edges(&mut self) {
+        self.edges.clear();
     }
 
     pub fn edge_vertices(&self, edge: Edge) -> (Vertex, Vertex) {
@@ -101,6 +111,18 @@ impl Diagram {
 
     pub fn faces(&self) -> IdsIter<FaceData> {
         self.faces.ids()
+    }
+
+    pub fn reset_faces(&mut self) {
+        for face in self.faces() {
+            let face_points: Vec<_> = self
+                .face_vertices(face)
+                .iter()
+                .map(|&vertex| self.vertex_point(vertex).position())
+                .collect();
+            let p = Point3::centroid(&face_points);
+            self.faces[face].point = Point::from_cartesian(p.x, p.y, p.z);
+        }
     }
 
     pub fn face_point(&self, face: Face) -> &Point {

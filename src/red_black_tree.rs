@@ -34,6 +34,11 @@ impl<T> Default for RedBlackTree<T> {
 }
 
 impl<T> RedBlackTree<T> {
+	pub fn clear(&mut self) {
+		self.root = None;
+		self.nodes.clear();
+	}
+	
     pub fn root(&self) -> Option<Node<T>> {
         self.root
     }

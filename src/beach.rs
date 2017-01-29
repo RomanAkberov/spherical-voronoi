@@ -85,6 +85,10 @@ impl Beach {
     pub fn last(&self) -> Arc {
         self.arcs.last(self.root().unwrap())
     }
+
+    pub fn clear(&mut self) {
+        self.arcs.clear();
+    }
 }
 
 impl Default for Beach {

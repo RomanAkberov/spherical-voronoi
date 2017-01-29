@@ -85,6 +85,10 @@ impl Events {
     pub fn center(&self, event: Circle) -> Point {
         self.circles[event].center
     }
+
+    pub fn clear(&mut self) {
+        self.circles.clear();
+    }
 }
 
 impl Default for Events {

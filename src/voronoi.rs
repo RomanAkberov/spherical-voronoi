@@ -1,6 +1,5 @@
 use std::f64::consts::PI;
 use std::cmp::Ordering;
-use cgmath::{Point3, EuclideanSpace};
 use angle::Angle;
 use point::Point;
 use events::{Events, EventKind, Circle};
@@ -34,7 +33,17 @@ impl Builder {
         Ok(builder)
     }
     
-    pub fn build(mut self) -> Result<Diagram, Error> {
+    pub fn build(mut self, relaxations: usize) -> Result<Diagram, Error> {
+        self.build_iter();
+        for _ in 1..relaxations {
+            self.reset();
+            self.build_iter();
+        }
+        self.finish();
+        Ok(self.diagram)
+    }   
+
+    fn build_iter(&mut self) {
         while let Some(event) = self.events.pop() {
             //println!("{:#?}", event);
             let point = event.point;
@@ -44,10 +53,21 @@ impl Builder {
                 EventKind::Circle(event) => self.handle_circle_event(event),
             }
         }
-        self.finish();
-        Ok(self.diagram)
     }
-  
+
+    fn reset(&mut self) {
+        self.diagram.reset_faces();
+        self.diagram.clear_vertices();
+        self.diagram.clear_edges();
+        for face in self.diagram.faces() {
+            self.events.add_site(face, *self.diagram.face_point(face));
+        }
+        self.temporary.clear();
+        self.events.clear();
+        self.beach.clear();
+        self.scan_theta = Angle::from(0.0);
+    }
+
     fn arc_point(&self, arc: Arc) -> &Point {
         &self.diagram.face_point(self.beach.face(arc))
     }
@@ -267,21 +287,6 @@ pub enum Error {
 }
 
 pub fn build(points: &[Point], relaxations: usize) -> Result<Diagram, Error> {
-    let mut diagram = Builder::new(points)?.build()?;
-    for _ in 0..relaxations {
-        let new_points: Vec<_> = diagram.faces().
-            map(|face| {
-                let face_points: Vec<_> = diagram
-                    .face_vertices(face)
-                    .iter()
-                    .map(|&vertex| diagram.vertex_point(vertex).position())
-                    .collect();
-                let p = Point3::centroid(&face_points);
-                Point::from_cartesian(p.x, p.y, p.z)
-            }).
-            collect();
-        diagram = Builder::new(&new_points)?.build()?;
-    }
-    Ok(diagram)
+    Builder::new(points)?.build(relaxations)
 }
 
