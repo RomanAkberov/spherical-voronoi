@@ -105,6 +105,17 @@ impl Diagram {
         }
     }
 
+    pub fn other_edge_face(&self, edge: Edge, face: Face) -> Face {
+        let (face0, face1) = self.edge_faces(edge);
+        if face == face0 {
+            face1
+        } else if face == face1 {
+            face0
+        } else {
+            Face::invalid()
+        }
+    }
+
     pub fn add_face(&mut self, point: Point) -> Face {
         self.faces.push(FaceData {
             point: point,
@@ -139,6 +150,13 @@ impl Diagram {
 
     pub fn face_edges(&self, face: Face) -> &[Edge] {
         &self.faces[face].edges
+    }
+
+    pub fn face_neighbors(&self, face: Face) -> Vec<Face> {
+        self.face_edges(face)
+            .iter()
+            .map(|&edge| self.other_edge_face(edge, face))
+            .collect()
     }
 }
 
