@@ -280,7 +280,7 @@ impl Builder {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Error {
     FewPoints,
 }
