@@ -85,6 +85,10 @@ impl Diagram {
     pub fn edge_vertices(&self, edge: Edge) -> (Vertex, Vertex) {
         self.edges[edge].vertices
     }
+ 
+    pub fn edge_faces(&self, edge: Edge) -> (Face, Face) {
+        self.edges[edge].faces
+    }
 
     pub fn set_edge_faces(&mut self, edge: Edge, face0: Face, face1: Face) {
         self.edges[edge].faces = (face0, face1)
