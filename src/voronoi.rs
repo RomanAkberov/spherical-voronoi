@@ -1,4 +1,3 @@
-use std::f64::consts::PI;
 use std::cmp::Ordering;
 use angle::Angle;
 use point::Point;
@@ -49,7 +48,7 @@ impl Builder {
             let point = event.point;
             self.scan_theta = *point.theta();
             match event.kind {
-                EventKind::Site(index) => self.handle_site_event(Face::from(index), point),
+                EventKind::Site(face) => self.handle_site_event(face, point),
                 EventKind::Circle(event) => self.handle_circle_event(event),
             }
         }
@@ -123,7 +122,7 @@ impl Builder {
                     },
                     Ordering::Equal => {
                         self.detach_circle(arc);
-                        let arc2 = {
+                        let twin = {
                             let face = self.beach.face(arc);
                             let a = if prev_arc == self.beach.last() {
                                 None
@@ -132,13 +131,13 @@ impl Builder {
                             };
                             self.beach.insert_after(a, face)
                         };
-                        let new_arc = self.beach.insert_after(Some(arc2), face);
-                        self.create_temporary(arc2, new_arc);
-                        self.attach_circle(prev_arc, arc2, new_arc, point.theta().value());
+                        let new_arc = self.beach.insert_after(Some(twin), face);
+                        self.create_temporary(twin, new_arc);
+                        self.attach_circle(prev_arc, twin, new_arc, point.theta().value());
                         self.attach_circle(new_arc, arc, next_arc, point.theta().value());
                         if self.detach_circle(prev_arc) {
                             let prev_prev = self.beach.prev(prev_arc);
-                            self.attach_circle(prev_prev, prev_arc, arc2, -2.0 * PI);
+                            self.attach_circle(prev_prev, prev_arc, twin, ::std::f64::MIN);
                         }
                         break;
                     }
