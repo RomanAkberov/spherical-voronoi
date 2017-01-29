@@ -3,6 +3,7 @@ use std::collections::BinaryHeap;
 use point::Point;
 use beach::Arc;
 use ideal::{Id, IdVec};
+use diagram::Face;
 
 pub struct CircleData {
     pub arcs: (Arc, Arc, Arc),
@@ -12,11 +13,13 @@ pub struct CircleData {
 }
 pub type Circle = Id<CircleData>;
 
+#[derive(Debug)]
 pub enum EventKind {
     Circle(Circle),
-    Site(usize),
+    Site(Face),
 }
 
+#[derive(Debug)]
 pub struct Event {
     pub point: Point,
     pub kind: EventKind,    
@@ -48,7 +51,7 @@ pub struct Events {
 }
 
 impl Events {
-    pub fn add_site(&mut self, face: usize, point: Point) {
+    pub fn add_site(&mut self, face: Face, point: Point) {
         self.heap.push(Event { point: point, kind: EventKind::Site(face) });
     }
     

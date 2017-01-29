@@ -1,32 +1,21 @@
 use std::f64::consts::PI;
 use std::cmp::Ordering;
-use cgmath::{Point3, InnerSpace, EuclideanSpace};
+use cgmath::{Point3, EuclideanSpace};
 use angle::Angle;
 use point::Point;
 use events::{Events, EventKind, Circle};
-use beach::{Beach, Arc};
-use diagram::{Diagram, Kind, Vertex, Edge, Face};
+use beach::{Beach, Arc, ArcStart};
+use diagram::{Diagram, Vertex, Face};
 
-pub trait Position : From<Point> {
-    fn point(&self) -> &Point;
-
-    fn position(&self) -> Point3<f64> {
-        self.point().position()
-    }
-}
-
-fn are_clockwise(n: Point3<f64>, p0: Point3<f64>, p1: Point3<f64>) -> bool {
-    (p0 - n).cross(p1 - n).dot(n.to_vec()) < 0.0
-}
-
-struct Builder<K: Kind> where K::Vertex: Position, K::Edge: Default, K::Face: Position {
+struct Builder {
     events: Events,
     beach: Beach,
-    diagram: Diagram<K>,
+    diagram: Diagram,
     scan_theta: Angle,
+    temporary: Vec<Vertex>,
 }
         
-impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: Position {
+impl Builder {
     fn new(points: &[Point]) -> Result<Self, Error> {
         if points.len() < 2 {
             return Err(Error::FewPoints);
@@ -35,17 +24,19 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
             events: Events::default(),
             beach: Beach::default(),
             diagram: Diagram::default(),
-            scan_theta: 0.0.into(),
+            scan_theta: Angle::from(0.0),
+            temporary: Vec::new(),
         };
         for &point in points {
-            let face = builder.diagram.add_face(point.into());
-            builder.events.add_site(face.index(), point);
+            let face = builder.diagram.add_face(point);
+            builder.events.add_site(face, point);
         }
         Ok(builder)
     }
     
-    fn build(mut self) -> Result<Diagram<K>, Error> {
+    pub fn build(mut self) -> Result<Diagram, Error> {
         while let Some(event) = self.events.pop() {
+            //println!("{:#?}", event);
             let point = event.point;
             self.scan_theta = *point.theta();
             match event.kind {
@@ -53,40 +44,28 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                 EventKind::Circle(event) => self.handle_circle_event(event),
             }
         }
-        self.cleanup_vertices();
-        self.finish_faces();
+        self.finish();
         Ok(self.diagram)
     }
   
     fn arc_point(&self, arc: Arc) -> &Point {
-        &self.diagram.face_data(Face::from(self.beach.face(arc))).point()
-    }
-    
-    fn create_vertex(&mut self, point: Point, faces: &[Face<K>]) -> Vertex<K> {
-        let vertex = self.diagram.add_vertex(point.into());
-        for &face in faces {
-            self.diagram.add_vertex_face(vertex, face);
-        }
-        vertex
-    }
-    
-    fn create_edge(&mut self, vertex0: Vertex<K>, vertex1: Vertex<K>) -> Edge<K> {
-        let edge = self.diagram.add_edge(Default::default());
-        self.diagram.set_edge_vertices(edge, vertex0, vertex1);
-        edge
+        &self.diagram.face_point(self.beach.face(arc))
     }
 
-    fn handle_site_event(&mut self, face: Face<K>, point: Point) {
+    fn create_temporary(&mut self, arc0: Arc, arc1: Arc) {
+        let index = self.temporary.len();
+        self.temporary.push(Vertex::invalid());
+        self.beach.set_start(arc0, ArcStart::Temporary(index));
+        self.beach.set_start(arc1, ArcStart::Temporary(index));
+    }
+
+    fn handle_site_event(&mut self, face: Face, point: Point) {
         if let Some(mut arc) = self.beach.root() {
             if self.beach.len() == 1 {
-                self.beach.insert_after(Some(arc), face.index());
+                self.beach.insert_after(Some(arc), face);
                 let arc0 = self.beach.first();
                 let arc1 = self.beach.last();
-                let point = self.phi_to_point(point.phi(), self.arc_point(arc0));
-                let faces = [face, Face::from(self.beach.face(arc0))];
-                let vertex = self.create_vertex(point, &faces);
-                self.beach.set_start(arc0, vertex.index());
-                self.beach.set_start(arc1, vertex.index());
+                self.create_temporary(arc0, arc1);
                 return;
             }
             let mut use_tree = true;
@@ -133,12 +112,8 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                             };
                             self.beach.insert_after(a, face)
                         };
-                        let new_arc = self.beach.insert_after(Some(arc2), face.index());
-                        let point = self.phi_to_point(point.phi(), self.arc_point(arc));
-                        let faces = [face, Face::from(self.beach.face(arc))];
-                        let vertex = self.create_vertex(point, &faces);
-                        self.beach.set_start(arc2, vertex.index());
-                        self.beach.set_start(new_arc, vertex.index());
+                        let new_arc = self.beach.insert_after(Some(arc2), face);
+                        self.create_temporary(arc2, new_arc);
                         self.attach_circle(prev_arc, arc2, new_arc, point.theta().value());
                         self.attach_circle(new_arc, arc, next_arc, point.theta().value());
                         if self.detach_circle(prev_arc) {
@@ -150,26 +125,37 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
                 }
             }
         } else {
-            self.beach.insert_after(None, face.index());
+            self.beach.insert_after(None, face);
         }
     }
     
-    fn merge_arcs(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, vertex: Option<Vertex<K>>) {
+    fn merge_arcs(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, vertex: Option<Vertex>) {
         let (face0, face1, face2) = (self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2));
         if face0 != face1 && face1 != face2 && face2 != face0 {
             let theta = self.scan_theta.value();
             if self.attach_circle(arc0, arc1, arc2, theta) {
                 if let Some(vertex) = vertex {
-                    self.beach.set_start(arc1, vertex.index());
+                    self.beach.set_start(arc1, ArcStart::Vertex(vertex));
                 }
             }
         }
     }
     
-    fn edge_from_arc(&mut self, arc: Arc, vertex: Vertex<K>) {
-        if let Some(start) = self.beach.start(arc) {
-            self.create_edge(Vertex::from(start), vertex);
-        }    
+    fn edge_from_arc(&mut self, arc: Arc, end: Vertex) {
+        match self.beach.start(arc) {
+            ArcStart::Temporary(index) => {
+                let start = self.temporary[index];
+                if start.is_invalid() {
+                    self.temporary[index] = end;
+                } else {
+                    self.diagram.add_edge(start, end);
+                }
+            },
+            ArcStart::Vertex(start) => {
+                self.diagram.add_edge(start, end);
+            },
+            ArcStart::None => {},
+        };
     }
     
     fn handle_circle_event(&mut self, event: Circle) {
@@ -181,9 +167,8 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         self.beach.set_circle(arc1, None);
         self.detach_circle(arc0);
         self.detach_circle(arc2);
-        let faces = [Face::from(self.beach.face(arc0)), Face::from(self.beach.face(arc1)), Face::from(self.beach.face(arc2))];
         let point = self.events.center(event);
-        let vertex = self.create_vertex(point, &faces);
+        let vertex = self.diagram.add_vertex(point, &[self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2)]);
         self.edge_from_arc(arc0, vertex);
         self.edge_from_arc(arc1, vertex);
         self.beach.remove(arc1);
@@ -231,18 +216,6 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         }
     }
     
-    fn phi_to_point(&self, phi: &Angle, point: &Point) -> Point {
-        let phi = phi.wrapped();
-        if point.theta() >= &self.scan_theta {
-            Point::from_angles(self.scan_theta, phi) // could be any point on the line segment
-        } else {
-            let a = self.scan_theta.sin() - point.theta().sin() * (phi.value() - point.phi().value()).cos();
-            let b = point.theta().cos() - self.scan_theta.cos();
-            let theta = Angle::from(b.atan2(a));
-            Point::from_angles(theta, phi)
-        }
-    }
-    
     fn attach_circle(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, min_theta: f64) -> bool {
         let p1 = self.arc_point(arc1).position();
         let p01 = self.arc_point(arc0).position() - p1;
@@ -271,28 +244,12 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
         }
     }
     
-    fn cleanup_vertices(&mut self) {
-        let mut bad_vertices = Vec::new();
-        for vertex in self.diagram.vertices() {
-            if self.diagram.vertex_faces(vertex).len() == 2 {
-                let (vertex0, vertex1) = {
-                    let neighbors: Vec<_> = self.diagram.vertex_neighbors(vertex).collect();
-                    assert_eq!(neighbors.len(), 2);
-                    (neighbors[0], neighbors[1])
-                };
-                self.create_edge(vertex0, vertex1);
-                bad_vertices.push(vertex);
-            }
-        }
-        self.diagram.remove_vertices(&bad_vertices);
-    }
-    
-    fn finish_faces(&mut self) {
+    fn finish(&mut self) {
         for edge in self.diagram.edges() {
             let mut common = Vec::new(); 
             let (vertex0, vertex1) = self.diagram.edge_vertices(edge);  
-            for face0 in self.diagram.vertex_faces(vertex0) {
-                for face1 in self.diagram.vertex_faces(vertex1) {
+            for &face0 in self.diagram.vertex_faces(vertex0) {
+                for &face1 in self.diagram.vertex_faces(vertex1) {
                     if face0 == face1 {
                         common.push(face0);
                     }
@@ -300,34 +257,6 @@ impl<K: Kind> Builder<K> where K::Vertex: Position, K::Edge: Default, K::Face: P
             }
             assert_eq!(common.len(), 2);
             self.diagram.set_edge_faces(edge, common[0], common[1]);
-        }
-        for face in self.diagram.faces() {
-            let n = self.diagram.face_data(face).position();
-            let mut edge = self.diagram.face_edges(face).next().unwrap();
-            let (v0, v1) = self.diagram.edge_vertices(edge);
-            let (prev, v) = if are_clockwise(n, self.diagram[v0].position(), self.diagram[v1].position()) {
-                (v0, v1) 
-            } else {
-                (v1, v0)
-            };
-            self.diagram.add_face_vertex(face, prev);
-            let mut vertex = v;
-            for _ in 0..self.diagram.face_edges(face).len() - 1 {
-                self.diagram.add_face_vertex(face, vertex);
-                for e in self.diagram.face_edges(face) {
-                    if e != edge {
-                        if let Some(v) = self.diagram.other_edge_vertex(e, vertex) {
-                            vertex = v;
-                            edge = e;
-                            break;
-                        }
-                    }
-                }    
-            }
-        }
-        for vertex in self.diagram.vertices() {
-            assert_eq!(self.diagram.vertex_faces(vertex).len(), 3);
-            assert_eq!(self.diagram.vertex_edges(vertex).len(), 3);
         }
     }
 }
@@ -337,18 +266,16 @@ pub enum Error {
     FewPoints,
 }
 
-pub fn build<K: Kind>(points: &[Point], relaxations: usize) -> Result<Diagram<K>, Error>
-    where K::Vertex: Position, K::Edge: Default, K::Face: Position {
+pub fn build(points: &[Point], relaxations: usize) -> Result<Diagram, Error> {
     let mut diagram = Builder::new(points)?.build()?;
     for _ in 0..relaxations {
         let new_points: Vec<_> = diagram.faces().
             map(|face| {
-                let face_points: Vec<_> = diagram.
-                    face_vertices(face).
-                    map(|vertex| {
-                        let data: &K::Vertex = &diagram[vertex];
-                        data.position()
-                    }).collect();
+                let face_points: Vec<_> = diagram
+                    .face_vertices(face)
+                    .iter()
+                    .map(|&vertex| diagram.vertex_point(vertex).position())
+                    .collect();
                 let p = Point3::centroid(&face_points);
                 Point::from_cartesian(p.x, p.y, p.z)
             }).
@@ -357,3 +284,4 @@ pub fn build<K: Kind>(points: &[Point], relaxations: usize) -> Result<Diagram<K>
     }
     Ok(diagram)
 }
+
