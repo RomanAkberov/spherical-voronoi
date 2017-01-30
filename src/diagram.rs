@@ -1,10 +1,9 @@
 use ideal::{Id, IdVec};
 use ideal::vec::IdsIter;
-use point::Point;
-use cgmath::{Point3, EuclideanSpace};
+use point::{Point, Position};
 
 pub struct VertexData {
-    point: Point3<f64>,
+    position: Position,
     edges: Vec<Edge>,
     faces: Vec<Face>,
 }
@@ -28,9 +27,9 @@ pub struct Diagram {
 }
 
 impl Diagram {
-    pub fn add_vertex(&mut self, point: Point3<f64>, faces: &[Face]) -> Vertex {
+    pub fn add_vertex(&mut self, position: Position, faces: &[Face]) -> Vertex {
         let vertex = self.vertices.push(VertexData {
-            point: point,
+            position: position,
             edges: Vec::new(),
             faces: Vec::from(faces),
         });
@@ -48,8 +47,8 @@ impl Diagram {
         self.vertices.clear()
     }
 
-    pub fn vertex_point(&self, vertex: Vertex) -> &Point3<f64> {
-        &self.vertices[vertex].point
+    pub fn vertex_position(&self, vertex: Vertex) -> &Position {
+        &self.vertices[vertex].position
     }
 
     pub fn vertex_edges(&self, vertex: Vertex) -> &[Edge] {
@@ -130,13 +129,11 @@ impl Diagram {
 
     pub fn reset_faces(&mut self) {
         for face in self.faces() {
-            let face_points: Vec<_> = self
-                .face_vertices(face)
-                .iter()
-                .map(|&vertex| *self.vertex_point(vertex))
-                .collect();
-            let p = Point3::centroid(&face_points);
-            self.faces[face].point = Point::from_cartesian(p.x, p.y, p.z);
+            let mut position = Position::new(0.0, 0.0, 0.0);
+            for vertex in self.face_vertices(face) {
+                position += *self.vertex_position(*vertex);
+            }
+            self.faces[face].point = Point::from(position / (self.vertices.len() as f64));
         }
     }
 

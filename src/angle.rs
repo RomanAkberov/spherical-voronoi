@@ -3,16 +3,12 @@ use std::cmp::Ordering;
 
 #[derive(Copy, Clone)]
 pub struct Angle {
-    value: f64,
-    sin: f64,
-    cos: f64,
+    pub value: f64,
+    pub sin: f64,
+    pub cos: f64,
 }
 
 impl Angle {
-    pub fn value(&self) -> f64 { self.value }
-    pub fn sin(&self) -> f64 { self.sin }
-    pub fn cos(&self) -> f64 { self.cos }
-    
     pub fn new(value: f64, sin: f64, cos: f64) -> Self {
         Angle {
             value: value,
@@ -61,17 +57,5 @@ impl From<f64> for Angle {
             sin: value.sin(),
             cos: value.cos(),
         }
-    }
-}
-
-impl PartialEq for Angle {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl PartialOrd for Angle {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.value.partial_cmp(&other.value)
     }
 }

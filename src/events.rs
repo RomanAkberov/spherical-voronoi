@@ -1,14 +1,13 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use point::Point;
 use beach::Arc;
 use ideal::{Id, IdVec};
 use diagram::Face;
-use cgmath::Point3;
+use point::Position;
 
 pub struct CircleData {
     pub arc: Arc,
-    pub center: Point3<f64>,
+    pub center: Position,
     pub is_invalid: bool,
 }
 pub type Circle = Id<CircleData>;
@@ -21,25 +20,25 @@ pub enum EventKind {
 
 #[derive(Debug)]
 pub struct Event {
-    pub point: Point,
+    pub theta: f64,
     pub kind: EventKind,    
 }
 
 impl PartialOrd for Event {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.point.partial_cmp(&self.point)
+        other.theta.partial_cmp(&self.theta)
     }
 }
 
 impl Ord for Event {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.point.cmp(&self.point)
+        self.partial_cmp(other).unwrap()
     }
 }
 
 impl PartialEq for Event {
     fn eq(&self, other: &Self) -> bool {
-        self.point == other.point
+        self.theta == other.theta
     }
 }
 
@@ -51,17 +50,17 @@ pub struct Events {
 }
 
 impl Events {
-    pub fn add_site(&mut self, face: Face, point: Point) {
-        self.heap.push(Event { point: point, kind: EventKind::Site(face) });
+    pub fn add_site(&mut self, face: Face, theta: f64) {
+        self.heap.push(Event { theta: theta, kind: EventKind::Site(face) });
     }
     
-    pub fn add_circle(&mut self, arc: Arc, center: Point3<f64>, point: Point) -> Circle {
+    pub fn add_circle(&mut self, arc: Arc, center: Position, theta: f64) -> Circle {
         let circle = self.circles.push(CircleData {
             arc: arc,
             center: center,
             is_invalid: false,
         });
-        self.heap.push(Event { point: point, kind: EventKind::Circle(circle) });
+        self.heap.push(Event { theta: theta, kind: EventKind::Circle(circle) });
         circle    
     }
     
@@ -81,7 +80,7 @@ impl Events {
         self.circles[event].arc
     }
     
-    pub fn center(&self, event: Circle) -> Point3<f64> {
+    pub fn center(&self, event: Circle) -> Position {
         self.circles[event].center
     }
 
