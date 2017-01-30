@@ -208,15 +208,9 @@ impl Builder {
         let point0 = self.arc_point(arc0);  
         let theta0 = point0.theta();
         let phi0 = point0.phi();
-        if theta0.value() >= self.scan_theta.value() {
-            return phi0.value();
-        }
         let point1 = self.arc_point(arc1);  
         let theta1 = point1.theta();
-        let phi1 = point1.phi();    
-        if theta1.value() >= self.scan_theta.value() {
-            return phi1.value();
-        } 
+        let phi1 = point1.phi();
         let u1 = (self.scan_theta.cos() - theta1.cos()) * theta0.sin();
         let u2 = (self.scan_theta.cos() - theta0.cos()) * theta1.sin();
         let a1 = u1 * phi0.cos();
