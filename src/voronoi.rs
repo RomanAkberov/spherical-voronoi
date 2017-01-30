@@ -233,7 +233,7 @@ impl Builder {
         let theta = center.theta().value() + radius;
         if theta >= min_theta {
             let point = Point::from_angles(Angle::from(theta), center.phi().clone());
-            let circle = self.events.add_circle(arc1, center, point);
+            let circle = self.events.add_circle(arc1, center.position(), point);
             self.beach.set_circle(arc1, Some(circle));
             true
         } else {

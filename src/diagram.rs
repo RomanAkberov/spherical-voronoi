@@ -4,7 +4,7 @@ use point::Point;
 use cgmath::{Point3, EuclideanSpace};
 
 pub struct VertexData {
-    point: Point,
+    point: Point3<f64>,
     edges: Vec<Edge>,
     faces: Vec<Face>,
 }
@@ -28,7 +28,7 @@ pub struct Diagram {
 }
 
 impl Diagram {
-    pub fn add_vertex(&mut self, point: Point, faces: &[Face]) -> Vertex {
+    pub fn add_vertex(&mut self, point: Point3<f64>, faces: &[Face]) -> Vertex {
         let vertex = self.vertices.push(VertexData {
             point: point,
             edges: Vec::new(),
@@ -48,7 +48,7 @@ impl Diagram {
         self.vertices.clear()
     }
 
-    pub fn vertex_point(&self, vertex: Vertex) -> &Point {
+    pub fn vertex_point(&self, vertex: Vertex) -> &Point3<f64> {
         &self.vertices[vertex].point
     }
 
@@ -133,7 +133,7 @@ impl Diagram {
             let face_points: Vec<_> = self
                 .face_vertices(face)
                 .iter()
-                .map(|&vertex| self.vertex_point(vertex).position())
+                .map(|&vertex| *self.vertex_point(vertex))
                 .collect();
             let p = Point3::centroid(&face_points);
             self.faces[face].point = Point::from_cartesian(p.x, p.y, p.z);

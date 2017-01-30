@@ -4,10 +4,11 @@ use point::Point;
 use beach::Arc;
 use ideal::{Id, IdVec};
 use diagram::Face;
+use cgmath::Point3;
 
 pub struct CircleData {
     pub arc: Arc,
-    pub center: Point,
+    pub center: Point3<f64>,
     pub is_invalid: bool,
 }
 pub type Circle = Id<CircleData>;
@@ -54,7 +55,7 @@ impl Events {
         self.heap.push(Event { point: point, kind: EventKind::Site(face) });
     }
     
-    pub fn add_circle(&mut self, arc: Arc, center: Point, point: Point) -> Circle {
+    pub fn add_circle(&mut self, arc: Arc, center: Point3<f64>, point: Point) -> Circle {
         let circle = self.circles.push(CircleData {
             arc: arc,
             center: center,
@@ -80,7 +81,7 @@ impl Events {
         self.circles[event].arc
     }
     
-    pub fn center(&self, event: Circle) -> Point {
+    pub fn center(&self, event: Circle) -> Point3<f64> {
         self.circles[event].center
     }
 
