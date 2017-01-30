@@ -6,9 +6,8 @@ use ideal::{Id, IdVec};
 use diagram::Face;
 
 pub struct CircleData {
-    pub arcs: (Arc, Arc, Arc),
+    pub arc: Arc,
     pub center: Point,
-    pub radius: f64,
     pub is_invalid: bool,
 }
 pub type Circle = Id<CircleData>;
@@ -55,11 +54,10 @@ impl Events {
         self.heap.push(Event { point: point, kind: EventKind::Site(face) });
     }
     
-    pub fn add_circle(&mut self, arcs: (Arc, Arc, Arc), center: Point, radius: f64, point: Point) -> Circle {
+    pub fn add_circle(&mut self, arc: Arc, center: Point, point: Point) -> Circle {
         let circle = self.circles.push(CircleData {
-            arcs: arcs,
+            arc: arc,
             center: center,
-            radius: radius,
             is_invalid: false,
         });
         self.heap.push(Event { point: point, kind: EventKind::Circle(circle) });
@@ -78,8 +76,8 @@ impl Events {
         self.circles[event].is_invalid = is_invalid;
     }
     
-    pub fn arcs(&self, event: Circle) -> (Arc, Arc, Arc) {
-        self.circles[event].arcs
+    pub fn arc(&self, event: Circle) -> Arc {
+        self.circles[event].arc
     }
     
     pub fn center(&self, event: Circle) -> Point {

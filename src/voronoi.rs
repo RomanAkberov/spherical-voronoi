@@ -181,25 +181,26 @@ impl Builder {
         if self.events.is_invalid(event) {
             return;
         }
-        let (arc0, arc1, arc2) = self.events.arcs(event);
-        assert_eq!(self.beach.circle(arc1), Some(event));
-        self.beach.set_circle(arc1, None);
-        self.detach_circle(arc0);
-        self.detach_circle(arc2);
+        let arc = self.events.arc(event);
+        assert_eq!(self.beach.circle(arc), Some(event));
+        let prev = self.beach.prev(arc);
+        let next = self.beach.next(arc);
+        self.detach_circle(prev);
+        self.detach_circle(next);
         let point = self.events.center(event);
-        let vertex = self.diagram.add_vertex(point, &[self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2)]);
-        self.edge_from_arc(arc0, vertex);
-        self.edge_from_arc(arc1, vertex);
-        self.beach.remove(arc1);
-        if self.beach.prev(arc0) == arc2 {
-            self.edge_from_arc(arc2, vertex);
-            self.beach.remove(arc0);
-            self.beach.remove(arc2);
+        let vertex = self.diagram.add_vertex(point, &[self.beach.face(prev), self.beach.face(arc), self.beach.face(next)]);
+        self.edge_from_arc(prev, vertex);
+        self.edge_from_arc(arc, vertex);
+        self.beach.remove(arc);
+        if self.beach.prev(prev) == next {
+            self.edge_from_arc(next, vertex);
+            self.beach.remove(prev);
+            self.beach.remove(next);
         } else {
-            let prev = self.beach.prev(arc0);
-            let next = self.beach.next(arc2);
-            self.merge_arcs(prev, arc0, arc2, Some(vertex));
-            self.merge_arcs(arc0, arc2, next, None);
+            let prev_prev = self.beach.prev(prev);
+            let next_next = self.beach.next(next);
+            self.merge_arcs(prev_prev, prev, next, Some(vertex));
+            self.merge_arcs(prev, next, next_next, None);
         }
     }
     
@@ -245,7 +246,7 @@ impl Builder {
         let theta = center.theta().value() + radius;
         if theta >= min_theta {
             let point = Point::from_angles(Angle::from(theta), center.phi().clone());
-            let circle = self.events.add_circle((arc0, arc1, arc2), center, radius, point);
+            let circle = self.events.add_circle(arc1, center, point);
             self.beach.set_circle(arc1, Some(circle));
             true
         } else {
