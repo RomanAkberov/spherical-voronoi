@@ -221,13 +221,10 @@ impl Builder {
         let b = b1 - b2;
         let c = (theta0.cos() - theta1.cos()) * self.scan_theta.sin();
         let length = (a * a + b * b).sqrt();
-        if a.abs() > length || c.abs() > length {
-            unreachable!()
-        } else {
-            let gamma = a.atan2(b);
-            let phi_int_plus_gamma1 = (c / length).asin();
-            Angle::wrap(phi_int_plus_gamma1 - gamma)
-        }
+        assert!(a.abs() <= length || c.abs() <= length);
+        let gamma = a.atan2(b);
+        let phi_int_plus_gamma1 = (c / length).asin();
+        Angle::wrap(phi_int_plus_gamma1 - gamma)
     }
     
     fn attach_circle(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, min_theta: f64) -> bool {
