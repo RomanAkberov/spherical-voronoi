@@ -149,13 +149,10 @@ impl Builder {
     }
     
     fn merge_arcs(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, vertex: Option<Vertex>) {
-        let (face0, face1, face2) = (self.beach.face(arc0), self.beach.face(arc1), self.beach.face(arc2));
-        if face0 != face1 && face1 != face2 && face2 != face0 {
-            let theta = self.scan_theta.value();
-            if self.attach_circle(arc0, arc1, arc2, theta) {
-                if let Some(vertex) = vertex {
-                    self.beach.set_start(arc1, ArcStart::Vertex(vertex));
-                }
+        let theta = self.scan_theta.value();
+        if self.attach_circle(arc0, arc1, arc2, theta) {
+            if let Some(vertex) = vertex {
+                self.beach.set_start(arc1, ArcStart::Vertex(vertex));
             }
         }
     }
@@ -221,7 +218,6 @@ impl Builder {
         let b = b1 - b2;
         let c = (theta0.cos() - theta1.cos()) * self.scan_theta.sin();
         let length = (a * a + b * b).sqrt();
-        assert!(a.abs() <= length || c.abs() <= length);
         let gamma = a.atan2(b);
         let phi_int_plus_gamma1 = (c / length).asin();
         Angle::wrap(phi_int_plus_gamma1 - gamma)
