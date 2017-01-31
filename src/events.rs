@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use beach::Arc;
 use ideal::{Id, IdVec};
-use diagram::Face;
+use diagram::Cell;
 use point::Position;
 
 pub struct CircleData {
@@ -15,7 +15,7 @@ pub type Circle = Id<CircleData>;
 #[derive(Debug)]
 pub enum EventKind {
     Circle(Circle),
-    Site(Face),
+    Site(Cell),
 }
 
 #[derive(Debug)]
@@ -50,7 +50,7 @@ pub struct Events {
 }
 
 impl Events {
-    pub fn add_site(&mut self, face: Face, theta: f64) {
+    pub fn add_site(&mut self, face: Cell, theta: f64) {
         self.heap.push(Event { theta: theta, kind: EventKind::Site(face) });
     }
     

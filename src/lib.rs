@@ -6,7 +6,9 @@ mod events;
 mod beach;
 mod red_black_tree;
 mod voronoi;
-pub mod diagram;
-pub mod point;
+mod diagram;
+mod point;
 
+pub use diagram::*;
+pub use point::*;
 pub use voronoi::{Error, build};

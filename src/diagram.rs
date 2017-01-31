@@ -5,15 +5,15 @@ use point::{Point, Position};
 pub struct VertexData {
     position: Position,
     edges: Vec<Edge>,
-    faces: Vec<Face>,
+    cells: Vec<Cell>,
 }
 
 pub struct EdgeData {
     vertices: (Vertex, Vertex),
-    faces: (Face, Face),
+    cells: (Cell, Cell),
 }
 
-pub struct FaceData {
+pub struct CellData {
     point: Point,
     vertices: Vec<Vertex>,
     edges: Vec<Edge>,
@@ -23,18 +23,18 @@ pub struct FaceData {
 pub struct Diagram {
     vertices: IdVec<VertexData>,
     edges: IdVec<EdgeData>,
-    faces: IdVec<FaceData>,
+    cells: IdVec<CellData>,
 }
 
 impl Diagram {
-    pub fn add_vertex(&mut self, position: Position, faces: &[Face]) -> Vertex {
+    pub fn add_vertex(&mut self, position: Position, cells: &[Cell]) -> Vertex {
         let vertex = self.vertices.push(VertexData {
             position: position,
             edges: Vec::new(),
-            faces: Vec::from(faces),
+            cells: Vec::from(cells),
         });
-        for &face in faces {
-            self.faces[face].vertices.push(vertex);
+        for &cell in cells {
+            self.cells[cell].vertices.push(vertex);
         }
         vertex
     }
@@ -47,16 +47,16 @@ impl Diagram {
         self.vertices.clear()
     }
 
-    pub fn vertex_position(&self, vertex: Vertex) -> &Position {
-        &self.vertices[vertex].position
+    pub fn vertex_position(&self, vertex: Vertex) -> Position {
+        self.vertices[vertex].position
     }
 
     pub fn vertex_edges(&self, vertex: Vertex) -> &[Edge] {
         &self.vertices[vertex].edges
     }
 
-    pub fn vertex_faces(&self, vertex: Vertex) -> &[Face] {
-        &self.vertices[vertex].faces
+    pub fn vertex_cells(&self, vertex: Vertex) -> &[Cell] {
+        &self.vertices[vertex].cells
     }
 
     pub fn vertex_neighbors(&self, vertex: Vertex) -> Vec<Vertex> {
@@ -69,7 +69,7 @@ impl Diagram {
     pub fn add_edge(&mut self, vertex0: Vertex, vertex1: Vertex) -> Edge {
         self.edges.push(EdgeData {
             vertices: (vertex0, vertex1),
-            faces: (Face::invalid(), Face::invalid())
+            cells: (Cell::invalid(), Cell::invalid())
         })
     }
 
@@ -85,12 +85,14 @@ impl Diagram {
         self.edges[edge].vertices
     }
  
-    pub fn edge_faces(&self, edge: Edge) -> (Face, Face) {
-        self.edges[edge].faces
+    pub fn edge_cells(&self, edge: Edge) -> (Cell, Cell) {
+        self.edges[edge].cells
     }
 
-    pub fn set_edge_faces(&mut self, edge: Edge, face0: Face, face1: Face) {
-        self.edges[edge].faces = (face0, face1)
+    pub fn set_edge_cells(&mut self, edge: Edge, cell0: Cell, cell1: Cell) {
+        self.edges[edge].cells = (cell0, cell1);
+        self.cells[cell0].edges.push(edge);
+        self.cells[cell1].edges.push(edge);
     }
 
     pub fn other_edge_vertex(&self, edge: Edge, vertex: Vertex) -> Vertex {
@@ -104,59 +106,59 @@ impl Diagram {
         }
     }
 
-    pub fn other_edge_face(&self, edge: Edge, face: Face) -> Face {
-        let (face0, face1) = self.edge_faces(edge);
-        if face == face0 {
-            face1
-        } else if face == face1 {
-            face0
+    pub fn other_edge_cell(&self, edge: Edge, cell: Cell) -> Cell {
+        let (cell0, cell1) = self.edge_cells(edge);
+        if cell == cell0 {
+            cell1
+        } else if cell == cell1 {
+            cell0
         } else {
-            Face::invalid()
+            Cell::invalid()
         }
     }
 
-    pub fn add_face(&mut self, point: Point) -> Face {
-        self.faces.push(FaceData {
+    pub fn add_cell(&mut self, point: Point) -> Cell {
+        self.cells.push(CellData {
             point: point,
             vertices: Vec::new(),
             edges: Vec::new(),
         })
     }
 
-    pub fn faces(&self) -> IdsIter<FaceData> {
-        self.faces.ids()
+    pub fn cells(&self) -> IdsIter<CellData> {
+        self.cells.ids()
     }
 
-    pub fn reset_faces(&mut self) {
-        for face in self.faces() {
+    pub fn reset_cells(&mut self) {
+        for cell in self.cells() {
             let mut position = Position::new(0.0, 0.0, 0.0);
-            for vertex in self.face_vertices(face) {
-                position += *self.vertex_position(*vertex);
+            for vertex in self.cell_vertices(cell) {
+                position += self.vertex_position(*vertex);
             }
-            self.faces[face].point = Point::from(position / (self.vertices.len() as f64));
+            self.cells[cell].point = Point::from(position / (self.vertices.len() as f64));
         }
     }
 
-    pub fn face_point(&self, face: Face) -> &Point {
-        &self.faces[face].point
+    pub fn cell_point(&self, cell: Cell) -> &Point {
+        &self.cells[cell].point
     }
 
-    pub fn face_vertices(&self, face: Face) -> &[Vertex] {
-        &self.faces[face].vertices
+    pub fn cell_vertices(&self, cell: Cell) -> &[Vertex] {
+        &self.cells[cell].vertices
     }
 
-    pub fn face_edges(&self, face: Face) -> &[Edge] {
-        &self.faces[face].edges
+    pub fn cell_edges(&self, cell: Cell) -> &[Edge] {
+        &self.cells[cell].edges
     }
 
-    pub fn face_neighbors(&self, face: Face) -> Vec<Face> {
-        self.face_edges(face)
+    pub fn cell_neighbors(&self, cell: Cell) -> Vec<Cell> {
+        self.cell_edges(cell)
             .iter()
-            .map(|&edge| self.other_edge_face(edge, face))
+            .map(|&edge| self.other_edge_cell(edge, cell))
             .collect()
     }
 }
 
 pub type Vertex = Id<VertexData>;
 pub type Edge = Id<EdgeData>;
-pub type Face = Id<FaceData>;
+pub type Cell = Id<CellData>;

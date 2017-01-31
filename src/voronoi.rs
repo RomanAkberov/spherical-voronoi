@@ -3,7 +3,7 @@ use angle::Angle;
 use point::Point;
 use events::{Events, EventKind, Circle};
 use beach::{Beach, Arc, ArcStart};
-use diagram::{Diagram, Vertex, Face};
+use diagram::{Diagram, Vertex, Cell};
 use cgmath::InnerSpace;
 
 struct Builder {
@@ -27,8 +27,8 @@ impl Builder {
             temporary: Vec::new(),
         };
         for &point in points {
-            let face = builder.diagram.add_face(point);
-            builder.events.add_site(face, point.theta.value);
+            let cell = builder.diagram.add_cell(point);
+            builder.events.add_site(cell, point.theta.value);
         }
         Ok(builder)
     }
@@ -48,18 +48,18 @@ impl Builder {
             //println!("{:#?}", event);
             self.scan_theta = Angle::from(event.theta);
             match event.kind {
-                EventKind::Site(face) => self.handle_site_event(face),
+                EventKind::Site(cell) => self.handle_site_event(cell),
                 EventKind::Circle(circle) => self.handle_circle_event(circle),
             }
         }
     }
 
     fn reset(&mut self) {
-        self.diagram.reset_faces();
+        self.diagram.reset_cells();
         self.diagram.clear_vertices();
         self.diagram.clear_edges();
-        for face in self.diagram.faces() {
-            self.events.add_site(face, self.diagram.face_point(face).theta.value);
+        for cell in self.diagram.cells() {
+            self.events.add_site(cell, self.diagram.cell_point(cell).theta.value);
         }
         self.temporary.clear();
         self.events.clear();
@@ -68,7 +68,7 @@ impl Builder {
     }
 
     fn arc_point(&self, arc: Arc) -> &Point {
-        &self.diagram.face_point(self.beach.face(arc))
+        &self.diagram.cell_point(self.beach.cell(arc))
     }
 
     fn create_temporary(&mut self, arc0: Arc, arc1: Arc) {
@@ -78,11 +78,11 @@ impl Builder {
         self.beach.set_start(arc1, ArcStart::Temporary(index));
     }
 
-    fn handle_site_event(&mut self, face: Face) {
-        let point = *self.diagram.face_point(face);
+    fn handle_site_event(&mut self, cell: Cell) {
+        let point = *self.diagram.cell_point(cell);
         if let Some(mut arc) = self.beach.root() {
             if self.beach.len() == 1 {
-                self.beach.insert_after(Some(arc), face);
+                self.beach.insert_after(Some(arc), cell);
                 let arc0 = self.beach.first();
                 let arc1 = self.beach.last();
                 self.create_temporary(arc0, arc1);
@@ -124,15 +124,15 @@ impl Builder {
                     Ordering::Equal => {
                         self.detach_circle(arc);
                         let twin = {
-                            let face = self.beach.face(arc);
+                            let cell = self.beach.cell(arc);
                             let a = if prev_arc == self.beach.last() {
                                 None
                             } else {
                                 Some(prev_arc)
                             };
-                            self.beach.insert_after(a, face)
+                            self.beach.insert_after(a, cell)
                         };
-                        let new_arc = self.beach.insert_after(Some(twin), face);
+                        let new_arc = self.beach.insert_after(Some(twin), cell);
                         self.create_temporary(twin, new_arc);
                         self.attach_circle(prev_arc, twin, new_arc, point.theta.value);
                         self.attach_circle(new_arc, arc, next_arc, point.theta.value);
@@ -145,7 +145,7 @@ impl Builder {
                 }
             }
         } else {
-            self.beach.insert_after(None, face);
+            self.beach.insert_after(None, cell);
         }
     }
     
@@ -186,7 +186,7 @@ impl Builder {
         self.detach_circle(prev);
         self.detach_circle(next);
         let point = self.events.center(circle);
-        let vertex = self.diagram.add_vertex(point, &[self.beach.face(prev), self.beach.face(arc), self.beach.face(next)]);
+        let vertex = self.diagram.add_vertex(point, &[self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
         self.edge_from_arc(prev, vertex);
         self.edge_from_arc(arc, vertex);
         self.beach.remove(arc);
@@ -254,15 +254,15 @@ impl Builder {
         for edge in self.diagram.edges() {
             let mut common = Vec::new(); 
             let (vertex0, vertex1) = self.diagram.edge_vertices(edge);  
-            for &face0 in self.diagram.vertex_faces(vertex0) {
-                for &face1 in self.diagram.vertex_faces(vertex1) {
-                    if face0 == face1 {
-                        common.push(face0);
+            for &cell0 in self.diagram.vertex_cells(vertex0) {
+                for &cell1 in self.diagram.vertex_cells(vertex1) {
+                    if cell0 == cell1 {
+                        common.push(cell0);
                     }
                 }
             }
             assert_eq!(common.len(), 2);
-            self.diagram.set_edge_faces(edge, common[0], common[1]);
+            self.diagram.set_edge_cells(edge, common[0], common[1]);
         }
     }
 }

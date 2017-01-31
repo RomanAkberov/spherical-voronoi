@@ -1,6 +1,6 @@
 use events::Circle;
 use red_black_tree::{RedBlackTree, Node};
-use diagram::{Vertex, Face};
+use diagram::{Vertex, Cell};
 
 #[derive(Copy, Clone)]
 pub enum ArcStart {
@@ -10,7 +10,7 @@ pub enum ArcStart {
 }
 
 pub struct ArcData {
-    face: Face,
+    cell: Cell,
     start: ArcStart,
     circle: Option<Circle>,
 }
@@ -26,9 +26,9 @@ impl Beach {
         self.arcs.root()
     }
 
-    pub fn insert_after(&mut self, arc: Option<Arc>, face: Face) -> Arc {
+    pub fn insert_after(&mut self, arc: Option<Arc>, cell: Cell) -> Arc {
         self.arcs.insert_after(arc, ArcData {
-            face: face,
+            cell: cell,
             start: ArcStart::None,
             circle: None,
         })
@@ -46,8 +46,8 @@ impl Beach {
         self.arcs[arc].circle = circle;
     }
     
-    pub fn face(&self, arc: Arc) -> Face {
-        self.arcs[arc].face
+    pub fn cell(&self, arc: Arc) -> Cell {
+        self.arcs[arc].cell
     }
     
     pub fn start(&mut self, arc: Arc) -> ArcStart {
