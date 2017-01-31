@@ -55,9 +55,7 @@ impl Builder {
     }
 
     fn reset(&mut self) {
-        self.diagram.reset_cells();
-        self.diagram.clear_vertices();
-        self.diagram.clear_edges();
+        self.diagram.reset();
         for cell in self.diagram.cells() {
             self.events.add_site(cell, self.diagram.cell_point(cell).theta.value);
         }

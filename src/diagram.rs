@@ -43,10 +43,6 @@ impl Diagram {
         self.vertices.ids()
     }
 
-    pub fn clear_vertices(&mut self) {
-        self.vertices.clear()
-    }
-
     pub fn vertex_position(&self, vertex: Vertex) -> Position {
         self.vertices[vertex].position
     }
@@ -75,10 +71,6 @@ impl Diagram {
 
     pub fn edges(&self) -> IdsIter<EdgeData> {
         self.edges.ids()
-    }
-
-    pub fn clear_edges(&mut self) {
-        self.edges.clear();
     }
 
     pub fn edge_vertices(&self, edge: Edge) -> (Vertex, Vertex) {
@@ -129,13 +121,22 @@ impl Diagram {
         self.cells.ids()
     }
 
-    pub fn reset_cells(&mut self) {
+    pub fn compute_centers(&mut self) {
         for cell in self.cells() {
             let mut position = Position::new(0.0, 0.0, 0.0);
             for vertex in self.cell_vertices(cell) {
                 position += self.vertex_position(*vertex);
             }
             self.cells[cell].point = Point::from(position / (self.vertices.len() as f64));
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.compute_centers();
+        self.vertices.clear();
+        self.edges.clear();
+        for cell in self.cells() {
+            self.cells[cell].vertices.clear();
         }
     }
 
