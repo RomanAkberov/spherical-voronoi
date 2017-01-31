@@ -63,10 +63,13 @@ impl Diagram {
     }
 
     pub fn add_edge(&mut self, vertex0: Vertex, vertex1: Vertex) -> Edge {
-        self.edges.push(EdgeData {
+        let edge = self.edges.push(EdgeData {
             vertices: (vertex0, vertex1),
             cells: (Cell::invalid(), Cell::invalid())
-        })
+        });
+        self.vertices[vertex0].edges.push(edge);
+        self.vertices[vertex1].edges.push(edge);
+        edge
     }
 
     pub fn edges(&self) -> IdsIter<EdgeData> {
