@@ -400,4 +400,3 @@ impl<T> IndexMut<Node<T>> for RedBlackTree<T> {
         &mut self.nodes[index].value
     }
 }
-

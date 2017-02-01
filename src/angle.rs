@@ -59,3 +59,9 @@ impl From<f64> for Angle {
         }
     }
 }
+
+impl Default for Angle {
+    fn default() -> Self {
+        Angle::from(0.0)
+    }
+}

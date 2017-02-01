@@ -11,4 +11,4 @@ mod point;
 
 pub use diagram::*;
 pub use point::*;
-pub use voronoi::{Error, build};
+pub use voronoi::build;

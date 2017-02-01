@@ -13,7 +13,7 @@ pub struct Point {
 
 impl fmt::Debug for Point {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({:.5}, {:.5}, {:.5})", self.position.x, self.position.y, self.position.z)
+        self.position.fmt(f)
     }
 }
 

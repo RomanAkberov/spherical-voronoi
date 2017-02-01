@@ -12,7 +12,7 @@ pub enum ArcStart {
 pub struct ArcData {
     cell: Cell,
     start: ArcStart,
-    circle: Option<Circle>,
+    circle: Circle,
 }
 
 pub type Arc = Node<ArcData>;
@@ -30,7 +30,7 @@ impl Beach {
         self.arcs.insert_after(arc, ArcData {
             cell: cell,
             start: ArcStart::None,
-            circle: None,
+            circle: Circle::invalid(),
         })
     }
     
@@ -38,11 +38,11 @@ impl Beach {
         self.arcs.remove(arc);
     }
 
-    pub fn circle(&self, arc: Arc) -> Option<Circle> {
+    pub fn circle(&self, arc: Arc) -> Circle {
         self.arcs[arc].circle    
     }
     
-    pub fn set_circle(&mut self, arc: Arc, circle: Option<Circle>) {
+    pub fn set_circle(&mut self, arc: Arc, circle: Circle) {
         self.arcs[arc].circle = circle;
     }
     

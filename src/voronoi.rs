@@ -6,6 +6,7 @@ use beach::{Beach, Arc, ArcStart};
 use diagram::{Diagram, Vertex, Cell};
 use cgmath::InnerSpace;
 
+#[derive(Default)]
 struct Builder {
     events: Events,
     beach: Beach,
@@ -15,32 +16,23 @@ struct Builder {
 }
         
 impl Builder {
-    fn new(points: &[Point]) -> Result<Self, Error> {
-        if points.len() < 2 {
-            return Err(Error::FewPoints);
-        }
-        let mut builder = Builder {
-            events: Events::default(),
-            beach: Beach::default(),
-            diagram: Diagram::default(),
-            scan_theta: Angle::from(0.0),
-            temporary: Vec::new(),
-        };
+    fn new(points: &[Point]) -> Self {
+        let mut builder = Builder::default();
         for &point in points {
             let cell = builder.diagram.add_cell(point);
             builder.events.add_site(cell, point.theta.value);
         }
-        Ok(builder)
+        builder
     }
     
-    pub fn build(mut self, relaxations: usize) -> Result<Diagram, Error> {
+    pub fn build(mut self, relaxations: usize) -> Diagram {
         self.build_iter();
         for _ in 1..relaxations {
             self.reset();
             self.build_iter();
         }
         self.finish();
-        Ok(self.diagram)
+        self.diagram
     }   
 
     fn build_iter(&mut self) {
@@ -62,7 +54,7 @@ impl Builder {
         self.temporary.clear();
         self.events.clear();
         self.beach.clear();
-        self.scan_theta = Angle::from(0.0);
+        self.scan_theta = Angle::default();
     }
 
     fn arc_point(&self, arc: Arc) -> &Point {
@@ -77,7 +69,6 @@ impl Builder {
     }
 
     fn handle_site_event(&mut self, cell: Cell) {
-        let point = *self.diagram.cell_point(cell);
         if let Some(mut arc) = self.beach.root() {
             if self.beach.len() == 1 {
                 self.beach.insert_after(Some(arc), cell);
@@ -86,13 +77,14 @@ impl Builder {
                 self.create_temporary(arc0, arc1);
                 return;
             }
+            let point = *self.diagram.cell_point(cell);
             let mut use_tree = true;
             loop {
-                let prev_arc = self.beach.prev(arc);
-                let next_arc = self.beach.next(arc);
-                let phi_start = self.arcs_intersection(prev_arc, arc);
-                let phi_end = self.arcs_intersection(arc, next_arc);
-                match point.phi.is_in_range(phi_start, phi_end) {
+                let prev = self.beach.prev(arc);
+                let next = self.beach.next(arc);
+                let start = self.arcs_intersection(prev, arc);
+                let end = self.arcs_intersection(arc, next);
+                match point.phi.is_in_range(start, end) {
                     Ordering::Less => {
                         if use_tree {
                             if let Some(left) = self.beach.left(arc) {
@@ -123,20 +115,20 @@ impl Builder {
                         self.detach_circle(arc);
                         let twin = {
                             let cell = self.beach.cell(arc);
-                            let a = if prev_arc == self.beach.last() {
+                            let a = if prev == self.beach.last() {
                                 None
                             } else {
-                                Some(prev_arc)
+                                Some(prev)
                             };
                             self.beach.insert_after(a, cell)
                         };
                         let new_arc = self.beach.insert_after(Some(twin), cell);
                         self.create_temporary(twin, new_arc);
-                        self.attach_circle(prev_arc, twin, new_arc, point.theta.value);
-                        self.attach_circle(new_arc, arc, next_arc, point.theta.value);
-                        if self.detach_circle(prev_arc) {
-                            let prev_prev = self.beach.prev(prev_arc);
-                            self.attach_circle(prev_prev, prev_arc, twin, ::std::f64::MIN);
+                        self.attach_circle(prev, twin, new_arc, point.theta.value);
+                        self.attach_circle(new_arc, arc, next, point.theta.value);
+                        if self.detach_circle(prev) {
+                            let prev_prev = self.beach.prev(prev);
+                            self.attach_circle(prev_prev, prev, twin, ::std::f64::MIN);
                         }
                         break;
                     }
@@ -156,7 +148,7 @@ impl Builder {
         }
     }
     
-    fn edge_from_arc(&mut self, arc: Arc, end: Vertex) {
+    fn create_edge(&mut self, arc: Arc, end: Vertex) {
         match self.beach.start(arc) {
             ArcStart::Temporary(index) => {
                 let start = self.temporary[index];
@@ -178,18 +170,18 @@ impl Builder {
             return;
         }
         let arc = self.events.arc(circle);
-        assert_eq!(self.beach.circle(arc), Some(circle));
+        assert_eq!(self.beach.circle(arc), circle);
         let prev = self.beach.prev(arc);
         let next = self.beach.next(arc);
         self.detach_circle(prev);
         self.detach_circle(next);
         let point = self.events.center(circle);
         let vertex = self.diagram.add_vertex(point, &[self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
-        self.edge_from_arc(prev, vertex);
-        self.edge_from_arc(arc, vertex);
+        self.create_edge(prev, vertex);
+        self.create_edge(arc, vertex);
         self.beach.remove(arc);
         if self.beach.prev(prev) == next {
-            self.edge_from_arc(next, vertex);
+            self.create_edge(next, vertex);
             self.beach.remove(prev);
             self.beach.remove(next);
         } else {
@@ -201,25 +193,17 @@ impl Builder {
     }
     
     fn arcs_intersection(&self, arc0: Arc, arc1: Arc) -> f64 {
-        let point0 = self.arc_point(arc0);  
-        let theta0 = point0.theta;
-        let phi0 = point0.phi;
-        let point1 = self.arc_point(arc1);  
-        let theta1 = point1.theta;
-        let phi1 = point1.phi;
-        let u1 = (self.scan_theta.cos - theta1.cos) * theta0.sin;
-        let u2 = (self.scan_theta.cos - theta0.cos) * theta1.sin;
-        let a1 = u1 * phi0.cos;
-        let a2 = u2 * phi1.cos;
-        let a = a1 - a2;
-        let b1 = u1 * phi0.sin;
-        let b2 = u2 * phi1.sin;
-        let b = b1 - b2;
-        let c = (theta0.cos - theta1.cos) * self.scan_theta.sin;
+        let point0 = self.arc_point(arc0);
+        let point1 = self.arc_point(arc1);
+        let u1 = (self.scan_theta.cos - point1.theta.cos) * point0.theta.sin;
+        let u2 = (self.scan_theta.cos - point0.theta.cos) * point1.theta.sin;
+        let a = u1 * point0.phi.cos - u2 * point1.phi.cos;
+        let b = u1 * point0.phi.sin - u2 * point1.phi.sin;
+        let c = (point0.theta.cos - point1.theta.cos) * self.scan_theta.sin;
         let length = (a * a + b * b).sqrt();
         let gamma = a.atan2(b);
-        let phi_int_plus_gamma1 = (c / length).asin();
-        Angle::wrap(phi_int_plus_gamma1 - gamma)
+        let phi_plus_gamma = (c / length).asin();
+        Angle::wrap(phi_plus_gamma - gamma)
     }
     
     fn attach_circle(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, min_theta: f64) -> bool {
@@ -231,7 +215,7 @@ impl Builder {
         let theta = center.z.acos() + radius;
         if theta >= min_theta {
             let circle = self.events.add_circle(arc1, center, theta);
-            self.beach.set_circle(arc1, Some(circle));
+            self.beach.set_circle(arc1, circle);
             true
         } else {
             false
@@ -239,9 +223,10 @@ impl Builder {
     }
     
     fn detach_circle(&mut self, arc: Arc) -> bool {
-        if let Some(event) = self.beach.circle(arc) {
-            self.events.set_invalid(event, true);
-            self.beach.set_circle(arc, None);
+        let circle = self.beach.circle(arc);
+        if circle.is_valid() {
+            self.events.set_invalid(circle, true);
+            self.beach.set_circle(arc, Circle::invalid());
             true
         } else {
             false
@@ -265,12 +250,6 @@ impl Builder {
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub enum Error {
-    FewPoints,
+pub fn build(points: &[Point], relaxations: usize) -> Diagram {
+    Builder::new(points).build(relaxations)
 }
-
-pub fn build(points: &[Point], relaxations: usize) -> Result<Diagram, Error> {
-    Builder::new(points)?.build(relaxations)
-}
-
