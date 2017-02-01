@@ -4,7 +4,7 @@ use diagram::Cell;
 
 #[derive(Debug)]
 pub enum EventKind {
-    Circle {arc: Arc, generation: usize },
+    Circle(Arc),
     Site(Cell),
 }
 

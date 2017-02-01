@@ -13,7 +13,7 @@ pub struct ArcData {
     cell: Cell,
     start: ArcStart,
     center: Position,
-    generation: usize,
+    is_valid: bool,
 }
 
 pub type Arc = Node<ArcData>;
@@ -32,7 +32,7 @@ impl Beach {
             cell: cell,
             start: ArcStart::None,
             center: Position::new(0.0, 0.0, 0.0),
-            generation: 0,
+            is_valid: false,
         })
     }
     
@@ -40,8 +40,8 @@ impl Beach {
         self.arcs.remove(arc);
     }
 
-    pub fn generation(&self, arc: Arc) -> usize {
-        self.arcs[arc].generation
+    pub fn is_valid(&self, arc: Arc) -> bool {
+        self.arcs[arc].is_valid
     }
     
     pub fn cell(&self, arc: Arc) -> Cell {
@@ -60,15 +60,14 @@ impl Beach {
         self.arcs[arc].center
     }
 
-    pub fn attach(&mut self, arc: Arc, center: Position) -> usize {
+    pub fn attach(&mut self, arc: Arc, center: Position) {
         let data = &mut self.arcs[arc];
-        data.generation += 1;
+        data.is_valid = true;
         data.center = center;
-        data.generation
     }
 
     pub fn detach(&mut self, arc: Arc) {
-        self.arcs[arc].generation = 0;
+        self.arcs[arc].is_valid = false;
     }
 
     pub fn len(&self) -> usize {

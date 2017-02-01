@@ -44,8 +44,8 @@ impl Builder {
             //println!("{:?}", event);
             self.scan_theta = Angle::from(event.theta);
             match event.kind {
-                EventKind::Site(cell) => self.handle_site_event(cell),
-                EventKind::Circle { arc, generation } => self.handle_circle_event(arc, generation),
+                EventKind::Site(cell) => self.site_event(cell),
+                EventKind::Circle(arc) => self.circle_event(arc),
             }
         }
     }
@@ -75,7 +75,7 @@ impl Builder {
         self.beach.set_start(arc1, ArcStart::Temporary(index));
     }
 
-    fn handle_site_event(&mut self, cell: Cell) {
+    fn site_event(&mut self, cell: Cell) {
         if let Some(mut arc) = self.beach.root() {
             if self.beach.len() == 1 {
                 self.beach.insert_after(Some(arc), cell);
@@ -168,11 +168,10 @@ impl Builder {
         };
     }
     
-    fn handle_circle_event(&mut self, arc: Arc, generation: usize) {
-        let arc_generation = self.beach.generation(arc);
-        if arc_generation != generation {
+    fn circle_event(&mut self, arc: Arc) {
+        if !self.beach.is_valid(arc) {
             return;
-        };
+        }
         let prev = self.beach.prev(arc);
         let next = self.beach.next(arc);
         self.beach.detach(arc);
@@ -217,10 +216,10 @@ impl Builder {
         let radius = center.dot(position).acos();
         let theta = center.z.acos() + radius;
         if theta >= min_theta {
-            let generation = self.beach.attach(arc, center);
+            self.beach.attach(arc, center);
             self.events.push(Event {
                 theta: theta,
-                kind: EventKind::Circle { arc: arc, generation: generation },
+                kind: EventKind::Circle(arc),
             });
             true
         } else {
