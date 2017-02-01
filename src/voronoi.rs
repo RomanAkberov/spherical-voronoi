@@ -1,14 +1,15 @@
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use angle::Angle;
 use point::Point;
-use events::{Events, EventKind, Circle};
+use events::{Event, EventKind};
 use beach::{Beach, Arc, ArcStart};
 use diagram::{Diagram, Vertex, Cell};
 use cgmath::InnerSpace;
 
 #[derive(Default)]
 struct Builder {
-    events: Events,
+    events: BinaryHeap<Event>,
     beach: Beach,
     diagram: Diagram,
     scan_theta: Angle,
@@ -20,7 +21,10 @@ impl Builder {
         let mut builder = Builder::default();
         for &point in points {
             let cell = builder.diagram.add_cell(point);
-            builder.events.add_site(cell, point.theta.value);
+            builder.events.push(Event {
+                theta: point.theta.value,
+                kind: EventKind::Site(cell),
+            });
         }
         builder
     }
@@ -37,24 +41,27 @@ impl Builder {
 
     fn build_iter(&mut self) {
         while let Some(event) = self.events.pop() {
-            //println!("{:#?}", event);
+            //println!("{:?}", event);
             self.scan_theta = Angle::from(event.theta);
             match event.kind {
                 EventKind::Site(cell) => self.handle_site_event(cell),
-                EventKind::Circle(circle) => self.handle_circle_event(circle),
+                EventKind::Circle { arc, generation } => self.handle_circle_event(arc, generation),
             }
         }
     }
 
     fn reset(&mut self) {
         self.diagram.reset();
-        for cell in self.diagram.cells() {
-            self.events.add_site(cell, self.diagram.cell_point(cell).theta.value);
-        }
-        self.temporary.clear();
         self.events.clear();
+        self.temporary.clear();
         self.beach.clear();
         self.scan_theta = Angle::default();
+        for cell in self.diagram.cells() {
+            self.events.push(Event {
+                theta: self.diagram.cell_point(cell).theta.value,
+                kind: EventKind::Site(cell)
+            });
+        }
     }
 
     fn arc_point(&self, arc: Arc) -> &Point {
@@ -112,7 +119,7 @@ impl Builder {
                         }
                     },
                     Ordering::Equal => {
-                        self.detach_circle(arc);
+                        self.beach.detach(arc);
                         let twin = {
                             let cell = self.beach.cell(arc);
                             let a = if prev == self.beach.last() {
@@ -126,7 +133,7 @@ impl Builder {
                         self.create_temporary(twin, new_arc);
                         self.attach_circle(prev, twin, new_arc, point.theta.value);
                         self.attach_circle(new_arc, arc, next, point.theta.value);
-                        if self.detach_circle(prev) {
+                        if self.beach.generation(prev) > 0 {
                             let prev_prev = self.beach.prev(prev);
                             self.attach_circle(prev_prev, prev, twin, ::std::f64::MIN);
                         }
@@ -165,17 +172,17 @@ impl Builder {
         };
     }
     
-    fn handle_circle_event(&mut self, circle: Circle) {
-        if self.events.is_invalid(circle) {
+    fn handle_circle_event(&mut self, arc: Arc, generation: usize) {
+        let arc_generation = self.beach.generation(arc);
+        if arc_generation != generation {
             return;
-        }
-        let arc = self.events.arc(circle);
-        assert_eq!(self.beach.circle(arc), circle);
+        };
         let prev = self.beach.prev(arc);
         let next = self.beach.next(arc);
-        self.detach_circle(prev);
-        self.detach_circle(next);
-        let point = self.events.center(circle);
+        self.beach.detach(arc);
+        self.beach.detach(prev);
+        self.beach.detach(next);
+        let point = self.beach.center(arc);
         let vertex = self.diagram.add_vertex(point, &[self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
         self.create_edge(prev, vertex);
         self.create_edge(arc, vertex);
@@ -206,27 +213,19 @@ impl Builder {
         Angle::wrap(phi_plus_gamma - gamma)
     }
     
-    fn attach_circle(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, min_theta: f64) -> bool {
-        let p1 = self.arc_point(arc1).position;
+    fn attach_circle(&mut self, arc0: Arc, arc: Arc, arc2: Arc, min_theta: f64) -> bool {
+        let p1 = self.arc_point(arc).position;
         let p01 = self.arc_point(arc0).position - p1;
         let p21 = self.arc_point(arc2).position - p1;
         let center = p01.cross(p21).normalize();
         let radius = center.dot(p1).acos();
         let theta = center.z.acos() + radius;
         if theta >= min_theta {
-            let circle = self.events.add_circle(arc1, center, theta);
-            self.beach.set_circle(arc1, circle);
-            true
-        } else {
-            false
-        }
-    }
-    
-    fn detach_circle(&mut self, arc: Arc) -> bool {
-        let circle = self.beach.circle(arc);
-        if circle.is_valid() {
-            self.events.set_invalid(circle, true);
-            self.beach.set_circle(arc, Circle::invalid());
+            let generation = self.beach.attach(arc, center);
+            self.events.push(Event {
+                theta: theta,
+                kind: EventKind::Circle { arc: arc, generation: generation },
+            });
             true
         } else {
             false

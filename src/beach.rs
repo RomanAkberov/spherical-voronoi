@@ -1,6 +1,6 @@
-use events::Circle;
 use red_black_tree::{RedBlackTree, Node};
 use diagram::{Vertex, Cell};
+use point::Position;
 
 #[derive(Copy, Clone)]
 pub enum ArcStart {
@@ -12,7 +12,8 @@ pub enum ArcStart {
 pub struct ArcData {
     cell: Cell,
     start: ArcStart,
-    circle: Circle,
+    center: Position,
+    generation: usize,
 }
 
 pub type Arc = Node<ArcData>;
@@ -30,7 +31,8 @@ impl Beach {
         self.arcs.insert_after(arc, ArcData {
             cell: cell,
             start: ArcStart::None,
-            circle: Circle::invalid(),
+            center: Position::new(0.0, 0.0, 0.0),
+            generation: 0,
         })
     }
     
@@ -38,19 +40,15 @@ impl Beach {
         self.arcs.remove(arc);
     }
 
-    pub fn circle(&self, arc: Arc) -> Circle {
-        self.arcs[arc].circle    
-    }
-    
-    pub fn set_circle(&mut self, arc: Arc, circle: Circle) {
-        self.arcs[arc].circle = circle;
+    pub fn generation(&self, arc: Arc) -> usize {
+        self.arcs[arc].generation
     }
     
     pub fn cell(&self, arc: Arc) -> Cell {
         self.arcs[arc].cell
     }
     
-    pub fn start(&mut self, arc: Arc) -> ArcStart {
+    pub fn start(&self, arc: Arc) -> ArcStart {
         self.arcs[arc].start    
     }
     
@@ -58,6 +56,21 @@ impl Beach {
         self.arcs[arc].start = start;
     }
     
+    pub fn center(&self, arc: Arc) -> Position {
+        self.arcs[arc].center
+    }
+
+    pub fn attach(&mut self, arc: Arc, center: Position) -> usize {
+        let data = &mut self.arcs[arc];
+        data.generation += 1;
+        data.center = center;
+        data.generation
+    }
+
+    pub fn detach(&mut self, arc: Arc) {
+        self.arcs[arc].generation = 0;
+    }
+
     pub fn len(&self) -> usize {
         self.arcs.len()
     }
