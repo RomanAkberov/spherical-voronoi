@@ -10,7 +10,6 @@ struct Builder {
     events: BinaryHeap<Event>,
     beach: Beach,
     diagram: Diagram,
-    scan_theta: f64,
     temporary: Vec<Vertex>,
 }
 
@@ -52,7 +51,6 @@ impl Builder {
         self.events.clear();
         self.temporary.clear();
         self.beach.clear();
-        self.scan_theta = 0.0;
         for cell in self.diagram.cells() {
             self.events.push(Event {
                 theta: self.diagram.cell_point(cell).theta.value,
@@ -89,7 +87,6 @@ impl Builder {
         if !self.beach.is_valid(arc) {
             return;
         }
-        self.scan_theta = theta;
         let (prev, next) = self.beach.neighbors(arc);
         self.beach.detach(arc);
         self.beach.detach(prev);
@@ -104,13 +101,12 @@ impl Builder {
             self.beach.remove(prev);
             self.beach.remove(next);
         } else {
-            self.merge_arcs(prev, Some(vertex));
-            self.merge_arcs(next, None);
+            self.merge_arcs(prev, Some(vertex), theta);
+            self.merge_arcs(next, None, theta);
         }
     }
     
-    fn merge_arcs(&mut self, arc: Arc, vertex: Option<Vertex>) {
-        let theta = self.scan_theta;
+    fn merge_arcs(&mut self, arc: Arc, vertex: Option<Vertex>, theta: f64) {
         if self.attach_circle(arc, theta) {
             if let Some(vertex) = vertex {
                 self.beach.set_start(arc, ArcStart::Vertex(vertex));
