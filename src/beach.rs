@@ -1,6 +1,8 @@
+use std::cmp::Ordering;
 use red_black_tree::{RedBlackTree, Node};
-use diagram::{Vertex, Cell};
-use point::Position;
+use diagram::{Diagram, Vertex, Cell};
+use point::{Point, Position};
+use angle::Angle;
 
 #[derive(Copy, Clone)]
 pub enum ArcStart {
@@ -25,6 +27,78 @@ pub struct Beach {
 impl Beach {
     pub fn root(&self) -> Option<Arc> {
         self.arcs.root()
+    }
+
+    pub fn insert(&mut self, cell: Cell, point: Point, diagram: &Diagram) -> Arc {
+        if let Some(root) = self.root() {
+            if self.len() == 1 {
+                return self.insert_after(Some(root), cell);
+            }
+            let mut arc = root;
+            let mut use_tree = true;
+            loop {
+                let (prev, next) = self.neighbors(arc);
+                let start = self.intersect(prev, arc, point.theta, diagram);
+                let end = self.intersect(arc, next, point.theta, diagram);
+                match point.phi.is_in_range(start, end) {
+                    Ordering::Less => {
+                        if use_tree {
+                            if let Some(left) = self.left(arc) {
+                                arc = left;
+                            } else {
+                                // the tree has failed us, do the linear search from now on.
+                                arc = self.last();
+                                use_tree = false;
+                            }
+                        } else {
+                            arc = self.prev(arc);
+                        }
+                    },
+                    Ordering::Greater => {
+                        if use_tree {
+                            if let Some(right) = self.right(arc) {
+                                arc = right;
+                            } else {
+                                // the tree has failed us, do the linear search from now on.
+                                arc = self.first();
+                                use_tree = false;
+                            }
+                        } else {
+                            arc = self.next(arc);
+                        }
+                    },
+                    Ordering::Equal => {
+                        self.detach(arc);
+                        let twin = {
+                            let cell = self.cell(arc);
+                            let a = if prev == self.last() {
+                                None
+                            } else {
+                                Some(prev)
+                            };
+                            self.insert_after(a, cell)
+                        };
+                        return self.insert_after(Some(twin), cell);
+                    }
+                }
+            }
+        } else {
+            self.insert_after(None, cell)
+        }
+    }
+        
+    fn intersect(&self, arc0: Arc, arc1: Arc, theta: Angle, diagram: &Diagram) -> f64 {
+        let point0 = diagram.cell_point(self.cell(arc0));
+        let point1 = diagram.cell_point(self.cell(arc1));
+        let u1 = (theta.cos - point1.theta.cos) * point0.theta.sin;
+        let u2 = (theta.cos - point0.theta.cos) * point1.theta.sin;
+        let a = u1 * point0.phi.cos - u2 * point1.phi.cos;
+        let b = u1 * point0.phi.sin - u2 * point1.phi.sin;
+        let c = (point0.theta.cos - point1.theta.cos) * theta.sin;
+        let length = (a * a + b * b).sqrt();
+        let gamma = a.atan2(b);
+        let phi_plus_gamma = (c / length).asin();
+        Angle::wrap(phi_plus_gamma - gamma)
     }
 
     pub fn insert_after(&mut self, arc: Option<Arc>, cell: Cell) -> Arc {

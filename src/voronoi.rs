@@ -1,6 +1,4 @@
-use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use angle::Angle;
 use point::Point;
 use events::{Event, EventKind};
 use beach::{Beach, Arc, ArcStart};
@@ -75,72 +73,18 @@ impl Builder {
     }
 
     fn site_event(&mut self, cell: Cell) {
-        if let Some(root) = self.beach.root() {
-            if self.beach.len() == 1 {
-                self.beach.insert_after(Some(root), cell);
-                let arc0 = self.beach.first();
-                let arc1 = self.beach.last();
-                self.create_temporary(arc0, arc1);
-                return;
+        let point = *self.diagram.cell_point(cell);
+        let arc = self.beach.insert(cell, point, &self.diagram);
+        let (prev, next) = self.beach.neighbors(arc);
+        if prev != arc {
+            self.create_temporary(prev, arc);
+            if prev != next {
+                self.attach_circle(prev, point.theta.value);
+                self.attach_circle(next, point.theta.value);
             }
-            let point = *self.diagram.cell_point(cell);
-            let mut arc = root;
-            let mut use_tree = true;
-            loop {
-                let (prev, next) = self.beach.neighbors(arc);
-                let start = self.arcs_intersection(prev, arc, point.theta);
-                let end = self.arcs_intersection(arc, next, point.theta);
-                match point.phi.is_in_range(start, end) {
-                    Ordering::Less => {
-                        if use_tree {
-                            if let Some(left) = self.beach.left(arc) {
-                                arc = left;
-                            } else {
-                                // the tree has failed us, do the linear search from now on.
-                                arc = self.beach.last();
-                                use_tree = false;
-                            }
-                        } else {
-                            arc = self.beach.prev(arc);
-                        }
-                    },
-                    Ordering::Greater => {
-                        if use_tree {
-                            if let Some(right) = self.beach.right(arc) {
-                                arc = right;
-                            } else {
-                                // the tree has failed us, do the linear search from now on.
-                                arc = self.beach.first();
-                                use_tree = false;
-                            }
-                        } else {
-                            arc = self.beach.next(arc);
-                        }
-                    },
-                    Ordering::Equal => {
-                        self.beach.detach(arc);
-                        let twin = {
-                            let cell = self.beach.cell(arc);
-                            let a = if prev == self.beach.last() {
-                                None
-                            } else {
-                                Some(prev)
-                            };
-                            self.beach.insert_after(a, cell)
-                        };
-                        let new = self.beach.insert_after(Some(twin), cell);
-                        self.create_temporary(twin, new);
-                        self.attach_circle(twin, point.theta.value);
-                        self.attach_circle(arc, point.theta.value);
-                        break;
-                    }
-                }
-            }
-        } else {
-            self.beach.insert_after(None, cell);
         }
     }
-    
+
     fn circle_event(&mut self, arc: Arc, theta: f64) {
         if !self.beach.is_valid(arc) {
             return;
@@ -189,20 +133,6 @@ impl Builder {
             },
             ArcStart::None => {},
         };
-    }
-    
-    fn arcs_intersection(&self, arc0: Arc, arc1: Arc, theta: Angle) -> f64 {
-        let point0 = self.arc_point(arc0);
-        let point1 = self.arc_point(arc1);
-        let u1 = (theta.cos - point1.theta.cos) * point0.theta.sin;
-        let u2 = (theta.cos - point0.theta.cos) * point1.theta.sin;
-        let a = u1 * point0.phi.cos - u2 * point1.phi.cos;
-        let b = u1 * point0.phi.sin - u2 * point1.phi.sin;
-        let c = (point0.theta.cos - point1.theta.cos) * theta.sin;
-        let length = (a * a + b * b).sqrt();
-        let gamma = a.atan2(b);
-        let phi_plus_gamma = (c / length).asin();
-        Angle::wrap(phi_plus_gamma - gamma)
     }
     
     fn attach_circle(&mut self, arc: Arc, min_theta: f64) -> bool {
