@@ -22,6 +22,7 @@ pub struct NodeData<T> {
 pub struct RedBlackTree<T> {
     root: Option<Node<T>>,
     nodes: IdVec<NodeData<T>>,
+	len: usize,
 }
 
 impl<T> Default for RedBlackTree<T> {
@@ -29,6 +30,7 @@ impl<T> Default for RedBlackTree<T> {
         RedBlackTree {
             root: None,
             nodes: Default::default(),
+			len: 0,
         }
     }
 }
@@ -37,6 +39,7 @@ impl<T> RedBlackTree<T> {
 	pub fn clear(&mut self) {
 		self.root = None;
 		self.nodes.clear();
+		self.len = 0;
 	}
 	
     pub fn root(&self) -> Option<Node<T>> {
@@ -44,7 +47,7 @@ impl<T> RedBlackTree<T> {
     }
     
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.len
     }
     
     pub fn next(&self, node: Node<T>) -> Option<Node<T>> {
@@ -103,6 +106,7 @@ impl<T> RedBlackTree<T> {
     }
     
     pub fn insert_after(&mut self, node: Option<Node<T>>, value: T) -> Node<T> {
+		self.len += 1;
 	    let successor = self.nodes.push(NodeData {
 	        value: value,
 	        next: None,
@@ -189,6 +193,7 @@ impl<T> RedBlackTree<T> {
 	}
 
     pub fn remove(&mut self, node: Node<T>) {
+		self.len -= 1;
 	    let prev = self.prev(node);
 	    let next = self.next(node);
 	    if let Some(next) = next {

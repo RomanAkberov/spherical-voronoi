@@ -141,7 +141,7 @@ impl Builder {
         }
     }
     
-        fn circle_event(&mut self, arc: Arc, theta: f64) {
+    fn circle_event(&mut self, arc: Arc, theta: f64) {
         if !self.beach.is_valid(arc) {
             return;
         }
