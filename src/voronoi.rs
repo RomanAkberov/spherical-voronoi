@@ -129,14 +129,10 @@ impl Builder {
                             };
                             self.beach.insert_after(a, cell)
                         };
-                        let new_arc = self.beach.insert_after(Some(twin), cell);
-                        self.create_temporary(twin, new_arc);
-                        self.attach_circle(prev, twin, new_arc, point.theta.value);
-                        self.attach_circle(new_arc, arc, next, point.theta.value);
-                        if self.beach.generation(prev) > 0 {
-                            let prev_prev = self.beach.prev(prev);
-                            self.attach_circle(prev_prev, prev, twin, ::std::f64::MIN);
-                        }
+                        let new = self.beach.insert_after(Some(twin), cell);
+                        self.create_temporary(twin, new);
+                        self.attach_circle(twin, prev, new, point.theta.value);
+                        self.attach_circle(arc, new, next, point.theta.value);
                         break;
                     }
                 }
@@ -146,11 +142,11 @@ impl Builder {
         }
     }
     
-    fn merge_arcs(&mut self, arc0: Arc, arc1: Arc, arc2: Arc, vertex: Option<Vertex>) {
+    fn merge_arcs(&mut self, arc: Arc, prev: Arc, next: Arc, vertex: Option<Vertex>) {
         let theta = self.scan_theta.value;
-        if self.attach_circle(arc0, arc1, arc2, theta) {
+        if self.attach_circle(arc, prev, next, theta) {
             if let Some(vertex) = vertex {
-                self.beach.set_start(arc1, ArcStart::Vertex(vertex));
+                self.beach.set_start(arc, ArcStart::Vertex(vertex));
             }
         }
     }
@@ -194,8 +190,8 @@ impl Builder {
         } else {
             let prev_prev = self.beach.prev(prev);
             let next_next = self.beach.next(next);
-            self.merge_arcs(prev_prev, prev, next, Some(vertex));
-            self.merge_arcs(prev, next, next_next, None);
+            self.merge_arcs(prev, prev_prev, next, Some(vertex));
+            self.merge_arcs(next, prev, next_next, None);
         }
     }
     
@@ -213,12 +209,12 @@ impl Builder {
         Angle::wrap(phi_plus_gamma - gamma)
     }
     
-    fn attach_circle(&mut self, arc0: Arc, arc: Arc, arc2: Arc, min_theta: f64) -> bool {
-        let p1 = self.arc_point(arc).position;
-        let p01 = self.arc_point(arc0).position - p1;
-        let p21 = self.arc_point(arc2).position - p1;
-        let center = p01.cross(p21).normalize();
-        let radius = center.dot(p1).acos();
+    fn attach_circle(&mut self, arc: Arc, prev: Arc, next: Arc, min_theta: f64) -> bool {
+        let position = self.arc_point(arc).position;
+        let from_prev = self.arc_point(prev).position - position;
+        let from_next = self.arc_point(next).position - position;
+        let center = from_prev.cross(from_next).normalize();
+        let radius = center.dot(position).acos();
         let theta = center.z.acos() + radius;
         if theta >= min_theta {
             let generation = self.beach.attach(arc, center);
