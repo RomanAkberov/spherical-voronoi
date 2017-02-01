@@ -10,13 +10,13 @@ pub enum EventKind {
 
 #[derive(Debug)]
 pub struct Event {
-    pub theta: f64,
+    pub theta: (f64, f64),
     pub kind: EventKind,    
 }
 
 impl PartialOrd for Event {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.theta.partial_cmp(&self.theta)
+        ((other.theta.0 - self.theta.0) + (other.theta.1 - self.theta.1)).partial_cmp(&0.0)
     }
 }
 
