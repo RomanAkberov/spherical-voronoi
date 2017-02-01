@@ -64,7 +64,7 @@ impl Builder {
     }
 
     fn arc_point(&self, arc: Arc) -> &Point {
-        &self.diagram.cell_point(self.beach.cell(arc))
+        self.diagram.cell_point(self.beach.cell(arc))
     }
 
     fn create_temporary(&mut self, arc0: Arc, arc1: Arc) {
@@ -75,19 +75,19 @@ impl Builder {
     }
 
     fn site_event(&mut self, cell: Cell) {
-        if let Some(mut arc) = self.beach.root() {
+        if let Some(root) = self.beach.root() {
             if self.beach.len() == 1 {
-                self.beach.insert_after(Some(arc), cell);
+                self.beach.insert_after(Some(root), cell);
                 let arc0 = self.beach.first();
                 let arc1 = self.beach.last();
                 self.create_temporary(arc0, arc1);
                 return;
             }
             let point = *self.diagram.cell_point(cell);
+            let mut arc = root;
             let mut use_tree = true;
             loop {
-                let prev = self.beach.prev(arc);
-                let next = self.beach.next(arc);
+                let (prev, next) = self.beach.neighbors(arc);
                 let start = self.arcs_intersection(prev, arc, point.theta);
                 let end = self.arcs_intersection(arc, next, point.theta);
                 match point.phi.is_in_range(start, end) {
@@ -130,8 +130,8 @@ impl Builder {
                         };
                         let new = self.beach.insert_after(Some(twin), cell);
                         self.create_temporary(twin, new);
-                        self.attach_circle(twin, prev, new, point.theta.value);
-                        self.attach_circle(arc, new, next, point.theta.value);
+                        self.attach_circle(twin, point.theta.value);
+                        self.attach_circle(arc, point.theta.value);
                         break;
                     }
                 }
@@ -146,8 +146,7 @@ impl Builder {
             return;
         }
         self.scan_theta = theta;
-        let prev = self.beach.prev(arc);
-        let next = self.beach.next(arc);
+        let (prev, next) = self.beach.neighbors(arc);
         self.beach.detach(arc);
         self.beach.detach(prev);
         self.beach.detach(next);
@@ -161,16 +160,14 @@ impl Builder {
             self.beach.remove(prev);
             self.beach.remove(next);
         } else {
-            let prev_prev = self.beach.prev(prev);
-            let next_next = self.beach.next(next);
-            self.merge_arcs(prev, prev_prev, next, Some(vertex));
-            self.merge_arcs(next, prev, next_next, None);
+            self.merge_arcs(prev, Some(vertex));
+            self.merge_arcs(next, None);
         }
     }
     
-    fn merge_arcs(&mut self, arc: Arc, prev: Arc, next: Arc, vertex: Option<Vertex>) {
+    fn merge_arcs(&mut self, arc: Arc, vertex: Option<Vertex>) {
         let theta = self.scan_theta;
-        if self.attach_circle(arc, prev, next, theta) {
+        if self.attach_circle(arc, theta) {
             if let Some(vertex) = vertex {
                 self.beach.set_start(arc, ArcStart::Vertex(vertex));
             }
@@ -208,7 +205,8 @@ impl Builder {
         Angle::wrap(phi_plus_gamma - gamma)
     }
     
-    fn attach_circle(&mut self, arc: Arc, prev: Arc, next: Arc, min_theta: f64) -> bool {
+    fn attach_circle(&mut self, arc: Arc, min_theta: f64) -> bool {
+        let (prev, next) = self.beach.neighbors(arc);
         let position = self.arc_point(arc).position;
         let from_prev = self.arc_point(prev).position - position;
         let from_next = self.arc_point(next).position - position;

@@ -36,6 +36,10 @@ impl Beach {
         })
     }
     
+    pub fn neighbors(&self, arc: Arc) -> (Arc, Arc) {
+        (self.prev(arc), self.next(arc))
+    }
+
     pub fn remove(&mut self, arc: Arc) {
         self.arcs.remove(arc);
     }
