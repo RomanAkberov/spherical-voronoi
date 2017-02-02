@@ -28,7 +28,7 @@ impl Angle {
     pub fn is_in_range(&self, start: f64, end: f64) -> Ordering {
         if self.is_between(start, end) {
             Ordering::Equal
-        } else if Angle::wrap(self.value - end).abs() < Angle::wrap(self.value - start).abs() {
+        } else if end.abs() < start.abs() {
             Ordering::Greater
         } else {
             Ordering::Less

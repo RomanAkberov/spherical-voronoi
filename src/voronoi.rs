@@ -92,7 +92,7 @@ impl Builder {
         self.beach.detach(prev);
         self.beach.detach(next);
         let point = self.beach.center(arc);
-        let vertex = self.diagram.add_vertex(point, &[self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
+        let vertex = self.diagram.add_vertex(point, [self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
         self.create_edge(prev, vertex);
         self.create_edge(arc, vertex);
         self.beach.remove(arc);

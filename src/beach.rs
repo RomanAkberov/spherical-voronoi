@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
+use std::f64::consts::{PI, FRAC_1_PI};
 use red_black_tree::{RedBlackTree, Node};
 use diagram::{Diagram, Vertex, Cell};
 use point::{Point, Position};
-use angle::Angle;
 
 #[derive(Copy, Clone)]
 pub enum ArcStart {
@@ -25,29 +25,26 @@ pub struct Beach {
 }
 
 impl Beach {
-    pub fn root(&self) -> Option<Arc> {
-        self.arcs.root()
-    }
-
     pub fn insert(&mut self, cell: Cell, point: Point, diagram: &Diagram) -> Arc {
-        if let Some(root) = self.root() {
-            if self.len() == 1 {
-                return self.insert_after(Some(root), cell);
-            }
+        let root = self.arcs.root();
+        if self.arcs.len() > 1 {
             let mut arc = root;
             let mut use_tree = true;
             loop {
+                let arc_point = diagram.cell_point(self.cell(arc));
                 let (prev, next) = self.neighbors(arc);
-                let start = self.intersect(prev, arc, point.theta, diagram);
-                let end = self.intersect(arc, next, point.theta, diagram);
-                match point.phi.is_in_range(start, end) {
+                let prev_point = diagram.cell_point(self.cell(prev));
+                let next_point = diagram.cell_point(self.cell(next));
+                let start = self.intersect(prev_point, arc_point, &point);
+                let end = self.intersect(arc_point, next_point, &point);
+                let direction = self.get_direction(start, end);
+                match direction {
                     Ordering::Less => {
                         if use_tree {
-                            if let Some(left) = self.left(arc) {
-                                arc = left;
-                            } else {
+                            arc = self.arcs.left(arc);
+                            if arc.is_invalid() {
                                 // the tree has failed us, do the linear search from now on.
-                                arc = self.last();
+                                arc = self.arcs.last(root);
                                 use_tree = false;
                             }
                         } else {
@@ -56,11 +53,10 @@ impl Beach {
                     },
                     Ordering::Greater => {
                         if use_tree {
-                            if let Some(right) = self.right(arc) {
-                                arc = right;
-                            } else {
+                            arc = self.arcs.right(arc);
+                            if arc.is_invalid() {
                                 // the tree has failed us, do the linear search from now on.
-                                arc = self.first();
+                                arc = self.arcs.first(root);
                                 use_tree = false;
                             }
                         } else {
@@ -71,37 +67,48 @@ impl Beach {
                         self.detach(arc);
                         let twin = {
                             let cell = self.cell(arc);
-                            let a = if prev == self.last() {
-                                None
+                            let a = if prev == self.arcs.last(root) {
+                                Node::invalid()
                             } else {
-                                Some(prev)
+                                prev
                             };
                             self.insert_after(a, cell)
                         };
-                        return self.insert_after(Some(twin), cell);
+                        return self.insert_after(twin, cell);
                     }
                 }
             }
         } else {
-            self.insert_after(None, cell)
+            self.insert_after(root, cell)
         }
     }
-        
-    fn intersect(&self, arc0: Arc, arc1: Arc, theta: Angle, diagram: &Diagram) -> f64 {
-        let point0 = diagram.cell_point(self.cell(arc0));
-        let point1 = diagram.cell_point(self.cell(arc1));
-        let u1 = (theta.cos - point1.theta.cos) * point0.theta.sin;
-        let u2 = (theta.cos - point0.theta.cos) * point1.theta.sin;
+
+    fn get_direction(&self, start: f64, end: f64) -> Ordering {
+        if start > end {
+            Ordering::Equal
+        } else if start.min(2.0 * PI - start) < end.min(2.0 * PI - end) {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    }
+    
+    fn intersect(&self, point0: &Point, point1: &Point, point2: &Point) -> f64 {
+        let u1 = (point2.theta.cos - point1.theta.cos) * point0.theta.sin;
+        let u2 = (point2.theta.cos - point0.theta.cos) * point1.theta.sin;
         let a = u1 * point0.phi.cos - u2 * point1.phi.cos;
         let b = u1 * point0.phi.sin - u2 * point1.phi.sin;
-        let c = (point0.theta.cos - point1.theta.cos) * theta.sin;
+        let c = (point0.theta.cos - point1.theta.cos) * point2.theta.sin;
         let length = (a * a + b * b).sqrt();
         let gamma = a.atan2(b);
         let phi_plus_gamma = (c / length).asin();
-        Angle::wrap(phi_plus_gamma - gamma)
+        let mut angle = phi_plus_gamma - gamma - point2.phi.value;
+        angle *= 0.5 * FRAC_1_PI;
+        angle -= angle.floor();
+        angle * 2.0 * PI
     }
 
-    pub fn insert_after(&mut self, arc: Option<Arc>, cell: Cell) -> Arc {
+    pub fn insert_after(&mut self, arc: Arc, cell: Cell) -> Arc {
         self.arcs.insert_after(arc, ArcData {
             cell: cell,
             start: ArcStart::None,
@@ -111,7 +118,7 @@ impl Beach {
     }
     
     pub fn neighbors(&self, arc: Arc) -> (Arc, Arc) {
-        (self.prev(arc), self.next(arc))
+        self.arcs.neighbors(arc)
     }
 
     pub fn remove(&mut self, arc: Arc) {
@@ -148,32 +155,12 @@ impl Beach {
         self.arcs[arc].is_valid = false;
     }
 
-    pub fn len(&self) -> usize {
-        self.arcs.len()
-    }
-
     pub fn next(&self, arc: Arc) -> Arc {
-        self.arcs.next(arc).unwrap_or_else(|| self.arcs.first(self.arcs.root().unwrap()))
+        self.arcs.next(arc)
     }
 
     pub fn prev(&self, arc: Arc) -> Arc {
-        self.arcs.prev(arc).unwrap_or_else(|| self.arcs.last(self.arcs.root().unwrap()))
-    }
-
-    pub fn left(&self, arc: Arc) -> Option<Arc> {
-        self.arcs.left(arc)
-    }
-
-    pub fn right(&self, arc: Arc) -> Option<Arc> {
-        self.arcs.right(arc)
-    }
-
-    pub fn first(&self) -> Arc {
-        self.arcs.first(self.root().unwrap())
-    }
-
-    pub fn last(&self) -> Arc {
-        self.arcs.last(self.root().unwrap())
+        self.arcs.prev(arc)
     }
 
     pub fn clear(&mut self) {

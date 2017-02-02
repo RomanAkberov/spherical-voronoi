@@ -5,7 +5,7 @@ use point::{Point, Position};
 pub struct VertexData {
     position: Position,
     edges: Vec<Edge>,
-    cells: Vec<Cell>,
+    cells: [Cell; 3],
 }
 
 pub struct EdgeData {
@@ -27,13 +27,13 @@ pub struct Diagram {
 }
 
 impl Diagram {
-    pub fn add_vertex(&mut self, position: Position, cells: &[Cell]) -> Vertex {
+    pub fn add_vertex(&mut self, position: Position, cells: [Cell; 3]) -> Vertex {
         let vertex = self.vertices.push(VertexData {
             position: position,
             edges: Vec::new(),
-            cells: Vec::from(cells),
+            cells: cells,
         });
-        for &cell in cells {
+        for &cell in &cells {
             self.cells[cell].vertices.push(vertex);
         }
         vertex
