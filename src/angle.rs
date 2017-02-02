@@ -17,10 +17,6 @@ impl Angle {
         }
     }
 
-    pub fn wrapped(&self) -> Self {
-        Angle::new(Angle::wrap(self.value), self.sin, self.cos)
-    }
-
     pub fn is_between(&self, start: f64, end: f64) -> bool {
         if start < end {
             start <= self.value && self.value <= end
