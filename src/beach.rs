@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::f64::consts::{PI, FRAC_1_PI};
 use red_black_tree::{RedBlackTree, Node};
 use diagram::{Diagram, Vertex, Cell};
@@ -16,6 +15,8 @@ pub struct ArcData {
     start: ArcStart,
     center: Position,
     is_valid: bool,
+    scan: f64,
+    end: f64,
 }
 
 pub type Arc = Node<ArcData>;
@@ -31,50 +32,43 @@ impl Beach {
             let mut arc = root;
             let mut use_tree = true;
             loop {
-                let arc_point = diagram.cell_point(self.cell(arc));
-                let (prev, next) = self.neighbors(arc);
-                let prev_point = diagram.cell_point(self.cell(prev));
-                let next_point = diagram.cell_point(self.cell(next));
-                let start = self.intersect(prev_point, arc_point, &point);
-                let end = self.intersect(arc_point, next_point, &point);
-                let direction = self.get_direction(start, end);
-                match direction {
-                    Ordering::Less => {
-                        if use_tree {
-                            arc = self.arcs.left(arc);
-                            if arc.is_invalid() {
-                                // the tree has failed us, do the linear search from now on.
-                                arc = self.arcs.last(root);
-                                use_tree = false;
-                            }
+                let prev = self.prev(arc);
+                let start = self.intersect_with_next(prev, &point, diagram);
+                let end = self.intersect_with_next(arc, &point, diagram);
+                if start > end {
+                    self.detach(arc);
+                    let twin = {
+                        let cell = self.cell(arc);
+                        let a = if prev == self.arcs.last(root) {
+                            Node::invalid()
                         } else {
-                            arc = self.prev(arc);
-                        }
-                    },
-                    Ordering::Greater => {
-                        if use_tree {
-                            arc = self.arcs.right(arc);
-                            if arc.is_invalid() {
-                                // the tree has failed us, do the linear search from now on.
-                                arc = self.arcs.first(root);
-                                use_tree = false;
-                            }
-                        } else {
-                            arc = self.next(arc);
-                        }
-                    },
-                    Ordering::Equal => {
-                        self.detach(arc);
-                        let twin = {
-                            let cell = self.cell(arc);
-                            let a = if prev == self.arcs.last(root) {
-                                Node::invalid()
-                            } else {
-                                prev
-                            };
-                            self.insert_after(a, cell)
+                            prev
                         };
-                        return self.insert_after(twin, cell);
+                        self.insert_after(a, cell)
+                    };
+                    return self.insert_after(twin, cell);
+                }
+                if start.min(2.0 * PI - start) < end.min(2.0 * PI - end) {
+                    if use_tree {
+                        arc = self.arcs.left(arc);
+                        if arc.is_invalid() {
+                            // the tree has failed us, do the linear search from now on.
+                            arc = self.arcs.last(root);
+                            use_tree = false;
+                        }
+                    } else {
+                        arc = self.prev(arc);
+                    }
+                } else {
+                    if use_tree {
+                        arc = self.arcs.right(arc);
+                        if arc.is_invalid() {
+                            // the tree has failed us, do the linear search from now on.
+                            arc = self.arcs.first(root);
+                            use_tree = false;
+                        }
+                    } else {
+                        arc = self.next(arc);
                     }
                 }
             }
@@ -82,18 +76,19 @@ impl Beach {
             self.insert_after(root, cell)
         }
     }
-
-    fn get_direction(&self, start: f64, end: f64) -> Ordering {
-        if start > end {
-            Ordering::Equal
-        } else if start.min(2.0 * PI - start) < end.min(2.0 * PI - end) {
-            Ordering::Less
-        } else {
-            Ordering::Greater
-        }
-    }
     
-    fn intersect(&self, point0: &Point, point1: &Point, point2: &Point) -> f64 {
+    fn intersect_with_next(&mut self, arc: Arc, point: &Point, diagram: &Diagram) -> f64 {
+        let arc_point = diagram.cell_point(self.cell(arc));
+        let next_point = diagram.cell_point(self.cell(self.next(arc)));
+        let data = &mut self.arcs[arc];
+        if data.scan != point.theta.value {
+            data.scan = point.theta.value;
+            data.end = Beach::intersect(arc_point, next_point, point);
+        }
+        data.end
+    }
+
+    fn intersect(point0: &Point, point1: &Point, point2: &Point) -> f64 {
         let u1 = (point2.theta.cos - point1.theta.cos) * point0.theta.sin;
         let u2 = (point2.theta.cos - point0.theta.cos) * point1.theta.sin;
         let a = u1 * point0.phi.cos - u2 * point1.phi.cos;
@@ -114,6 +109,8 @@ impl Beach {
             start: ArcStart::None,
             center: Position::new(0.0, 0.0, 0.0),
             is_valid: false,
+            scan: -1.0,
+            end: 0.0,
         })
     }
     

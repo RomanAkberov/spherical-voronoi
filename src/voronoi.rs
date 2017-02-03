@@ -101,16 +101,10 @@ impl Builder {
             self.beach.remove(prev);
             self.beach.remove(next);
         } else {
-            self.merge_arcs(prev, Some(vertex), theta);
-            self.merge_arcs(next, None, theta);
-        }
-    }
-    
-    fn merge_arcs(&mut self, arc: Arc, vertex: Option<Vertex>, theta: (f64, f64)) {
-        if self.attach_circle(arc, theta) {
-            if let Some(vertex) = vertex {
-                self.beach.set_start(arc, ArcStart::Vertex(vertex));
+            if self.attach_circle(prev, theta) {
+                self.beach.set_start(prev, ArcStart::Vertex(vertex));
             }
+            self.attach_circle(next, theta);
         }
     }
     
