@@ -26,15 +26,16 @@ pub struct Beach {
 }
 
 impl Beach {
-    pub fn insert(&mut self, cell: Cell, point: Point, diagram: &Diagram) -> Arc {
+    pub fn insert(&mut self, cell: Cell, diagram: &Diagram) -> Arc {
         let root = self.arcs.root();
         if self.arcs.len() > 1 {
+            let point = diagram.cell_point(cell);
             let mut arc = root;
             let mut use_tree = true;
             loop {
                 let prev = self.prev(arc);
-                let start = self.intersect_with_next(prev, &point, diagram);
-                let end = self.intersect_with_next(arc, &point, diagram);
+                let start = self.intersect_with_next(prev, point, diagram);
+                let end = self.intersect_with_next(arc, point, diagram);
                 if start > end {
                     self.detach(arc);
                     let twin = {
@@ -81,7 +82,7 @@ impl Beach {
         let arc_point = diagram.cell_point(self.cell(arc));
         let next_point = diagram.cell_point(self.cell(self.next(arc)));
         let data = &mut self.arcs[arc];
-        if data.scan != point.theta.value {
+        if data.scan < point.theta.value {
             data.scan = point.theta.value;
             data.end = Beach::intersect(arc_point, next_point, point);
         }

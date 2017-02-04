@@ -1,8 +1,25 @@
 use std::fmt;
 use cgmath::{Vector3, InnerSpace};
-use angle::Angle;
 
 pub type Position = Vector3<f64>;
+
+#[derive(Copy, Clone)]
+pub struct Angle {
+    pub value: f64,
+    pub sin: f64,
+    pub cos: f64,
+}
+
+impl From<f64> for Angle {
+    fn from(value: f64) -> Self {
+        let (sin, cos) = value.sin_cos();
+        Angle {
+            value: value,
+            sin: sin,
+            cos: cos,
+        }
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct Point {

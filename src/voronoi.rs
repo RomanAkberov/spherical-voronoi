@@ -71,14 +71,14 @@ impl Builder {
     }
 
     fn site_event(&mut self, cell: Cell) {
-        let point = *self.diagram.cell_point(cell);
-        let arc = self.beach.insert(cell, point, &self.diagram);
+        let arc = self.beach.insert(cell, &self.diagram);
         let (prev, next) = self.beach.neighbors(arc);
         if prev != arc {
             self.create_temporary(prev, arc);
             if prev != next {
-                self.attach_circle(prev, (point.theta.value, 0.0));
-                self.attach_circle(next, (point.theta.value, 0.0));
+                let theta = self.diagram.cell_point(cell).theta.value;
+                self.attach_circle(prev, (theta, 0.0));
+                self.attach_circle(next, (theta, 0.0));
             }
         }
     }
