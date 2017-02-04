@@ -1,16 +1,17 @@
 use std::collections::BinaryHeap;
+use cgmath::InnerSpace;
+use ideal::{Id, IdVec};
 use point::Point;
 use events::{Event, EventKind};
-use beach::{Beach, Arc, ArcStart};
+use beach::{Beach, Arc, Start};
 use diagram::{Diagram, Vertex, Cell};
-use cgmath::InnerSpace;
 
 #[derive(Default)]
 struct Builder {
     events: BinaryHeap<Event>,
     beach: Beach,
     diagram: Diagram,
-    temporary: Vec<Vertex>,
+    starts: IdVec<Start>,
 }
 
 impl Builder {
@@ -49,7 +50,7 @@ impl Builder {
     fn reset(&mut self) {
         self.diagram.reset();
         self.events.clear();
-        self.temporary.clear();
+        self.starts.clear();
         self.beach.clear();
         for cell in self.diagram.cells() {
             self.events.push(Event {
@@ -64,10 +65,9 @@ impl Builder {
     }
 
     fn create_temporary(&mut self, arc0: Arc, arc1: Arc) {
-        let index = self.temporary.len();
-        self.temporary.push(Vertex::invalid());
-        self.beach.set_start(arc0, ArcStart::Temporary(index));
-        self.beach.set_start(arc1, ArcStart::Temporary(index));
+        let start = self.starts.push(Start { vertex: Id::invalid() });
+        self.beach.set_start(arc0, start);
+        self.beach.set_start(arc1, start);
     }
 
     fn site_event(&mut self, cell: Cell) {
@@ -102,27 +102,23 @@ impl Builder {
             self.beach.remove(next);
         } else {
             if self.attach_circle(prev, theta) {
-                self.beach.set_start(prev, ArcStart::Vertex(vertex));
+                let start = self.starts.push(Start { vertex: vertex });
+                self.beach.set_start(prev, start);
             }
             self.attach_circle(next, theta);
         }
     }
     
     fn create_edge(&mut self, arc: Arc, end: Vertex) {
-        match self.beach.start(arc) {
-            ArcStart::Temporary(index) => {
-                let start = self.temporary[index];
-                if start.is_invalid() {
-                    self.temporary[index] = end;
-                } else {
-                    self.diagram.add_edge(start, end);
-                }
-            },
-            ArcStart::Vertex(start) => {
-                self.diagram.add_edge(start, end);
-            },
-            ArcStart::None => {},
-        };
+        let start = self.beach.start(arc);
+        if start.is_valid() {
+            let vertex = self.starts[start].vertex;
+            if vertex.is_valid() {
+                self.diagram.add_edge(vertex, end);
+            } else {
+                self.starts[start].vertex = end;
+            }
+        }
     }
     
     fn attach_circle(&mut self, arc: Arc, min: (f64, f64)) -> bool {
@@ -157,6 +153,10 @@ impl Builder {
             }
             assert_eq!(common.len(), 2);
             self.diagram.set_edge_cells(edge, common[0], common[1]);
+        }
+        for vertex in self.diagram.vertices() {
+            assert_eq!(self.diagram.vertex_cells(vertex).len(), 3);
+            assert_eq!(self.diagram.vertex_edges(vertex).len(), 3);
         }
     }
 }

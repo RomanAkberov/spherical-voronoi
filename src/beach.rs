@@ -1,18 +1,16 @@
 use std::f64::consts::{PI, FRAC_1_PI};
+use ideal::Id;
 use red_black_tree::{RedBlackTree, Node};
 use diagram::{Diagram, Vertex, Cell};
 use point::{Point, Position};
 
-#[derive(Copy, Clone)]
-pub enum ArcStart {
-    None,
-    Vertex(Vertex),
-    Temporary(usize),
+pub struct Start {
+    pub vertex: Vertex,
 }
 
 pub struct ArcData {
     cell: Cell,
-    start: ArcStart,
+    start: Id<Start>,
     center: Position,
     is_valid: bool,
     scan: f64,
@@ -107,7 +105,7 @@ impl Beach {
     pub fn insert_after(&mut self, arc: Arc, cell: Cell) -> Arc {
         self.arcs.insert_after(arc, ArcData {
             cell: cell,
-            start: ArcStart::None,
+            start: Id::invalid(),
             center: Position::new(0.0, 0.0, 0.0),
             is_valid: false,
             scan: -1.0,
@@ -131,11 +129,11 @@ impl Beach {
         self.arcs[arc].cell
     }
     
-    pub fn start(&self, arc: Arc) -> ArcStart {
+    pub fn start(&self, arc: Arc) -> Id<Start> {
         self.arcs[arc].start    
     }
     
-    pub fn set_start(&mut self, arc: Arc, start: ArcStart) {
+    pub fn set_start(&mut self, arc: Arc, start: Id<Start>) {
         self.arcs[arc].start = start;
     }
     
