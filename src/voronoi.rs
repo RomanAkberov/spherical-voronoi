@@ -20,7 +20,7 @@ impl Builder {
         for &point in points {
             let cell = builder.diagram.add_cell(point);
             builder.events.push(Event {
-                theta: (point.theta.value, 0.0),
+                theta: point.theta.value,
                 kind: EventKind::Site(cell),
             });
         }
@@ -54,7 +54,7 @@ impl Builder {
         self.beach.clear();
         for cell in self.diagram.cells() {
             self.events.push(Event {
-                theta: (self.diagram.cell_point(cell).theta.value, 0.0),
+                theta: self.diagram.cell_point(cell).theta.value,
                 kind: EventKind::Site(cell)
             });
         }
@@ -77,13 +77,13 @@ impl Builder {
             self.create_temporary(prev, arc);
             if prev != next {
                 let theta = self.diagram.cell_point(cell).theta.value;
-                self.attach_circle(prev, (theta, 0.0));
-                self.attach_circle(next, (theta, 0.0));
+                self.attach_circle(prev, theta);
+                self.attach_circle(next, theta);
             }
         }
     }
 
-    fn circle_event(&mut self, arc: Arc, theta: (f64, f64)) {
+    fn circle_event(&mut self, arc: Arc, theta: f64) {
         if !self.beach.is_valid(arc) {
             return;
         }
@@ -121,14 +121,14 @@ impl Builder {
         }
     }
     
-    fn attach_circle(&mut self, arc: Arc, min: (f64, f64)) -> bool {
+    fn attach_circle(&mut self, arc: Arc, min: f64) -> bool {
         let (prev, next) = self.beach.neighbors(arc);
         let position = self.arc_point(arc).position;
         let from_prev = self.arc_point(prev).position - position;
         let from_next = self.arc_point(next).position - position;
         let center = from_prev.cross(from_next).normalize();
-        let theta = (center.z.acos(), center.dot(position).acos());
-        if (theta.0 - min.0) + (theta.1 - min.1) >= 0.0 {
+        let theta = center.z.acos() + center.dot(position).acos();
+        if theta >= min {
             self.beach.attach(arc, center);
             self.events.push(Event {
                 theta: theta,
