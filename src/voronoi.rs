@@ -84,28 +84,26 @@ impl Builder {
     }
 
     fn circle_event(&mut self, arc: Arc, theta: f64) {
-        if !self.beach.is_valid(arc) {
-            return;
-        }
-        let (prev, next) = self.beach.neighbors(arc);
-        self.beach.detach(arc);
-        self.beach.detach(prev);
-        self.beach.detach(next);
-        let point = self.beach.center(arc);
-        let vertex = self.diagram.add_vertex(point, [self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
-        self.create_edge(prev, vertex);
-        self.create_edge(arc, vertex);
-        self.beach.remove(arc);
-        if self.beach.prev(prev) == next {
-            self.create_edge(next, vertex);
-            self.beach.remove(prev);
-            self.beach.remove(next);
-        } else {
-            if self.attach_circle(prev, theta) {
-                let start = self.starts.push(Start { vertex: vertex });
-                self.beach.set_start(prev, start);
+        if let Some(center) = self.beach.center(arc) {
+            let (prev, next) = self.beach.neighbors(arc);
+            self.beach.detach_circle(arc);
+            self.beach.detach_circle(prev);
+            self.beach.detach_circle(next);
+            let vertex = self.diagram.add_vertex(center, [self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
+            self.create_edge(prev, vertex);
+            self.create_edge(arc, vertex);
+            self.beach.remove(arc);
+            if self.beach.prev(prev) == next {
+                self.create_edge(next, vertex);
+                self.beach.remove(prev);
+                self.beach.remove(next);
+            } else {
+                if self.attach_circle(prev, theta) {
+                    let start = self.starts.push(Start { vertex: vertex });
+                    self.beach.set_start(prev, start);
+                }
+                self.attach_circle(next, theta);
             }
-            self.attach_circle(next, theta);
         }
     }
     
@@ -129,7 +127,7 @@ impl Builder {
         let center = from_prev.cross(from_next).normalize();
         let theta = center.z.acos() + center.dot(position).acos();
         if theta >= min {
-            self.beach.attach(arc, center);
+            self.beach.attach_circle(arc, center);
             self.events.push(Event {
                 theta: theta,
                 kind: EventKind::Circle(arc),

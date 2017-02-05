@@ -11,8 +11,7 @@ pub struct Start {
 pub struct ArcData {
     cell: Cell,
     start: Id<Start>,
-    center: Position,
-    is_valid: bool,
+    center: Option<Position>,
     scan: f64,
     end: f64,
 }
@@ -35,7 +34,6 @@ impl Beach {
                 let start = self.intersect_with_next(prev, point, diagram);
                 let end = self.intersect_with_next(arc, point, diagram);
                 if start > end {
-                    self.detach(arc);
                     let twin = {
                         let cell = self.cell(arc);
                         let a = if prev == self.arcs.last(root) {
@@ -106,8 +104,7 @@ impl Beach {
         self.arcs.insert_after(arc, ArcData {
             cell: cell,
             start: Id::invalid(),
-            center: Position::new(0.0, 0.0, 0.0),
-            is_valid: false,
+            center: None,
             scan: -1.0,
             end: 0.0,
         })
@@ -119,10 +116,6 @@ impl Beach {
 
     pub fn remove(&mut self, arc: Arc) {
         self.arcs.remove(arc);
-    }
-
-    pub fn is_valid(&self, arc: Arc) -> bool {
-        self.arcs[arc].is_valid
     }
     
     pub fn cell(&self, arc: Arc) -> Cell {
@@ -137,18 +130,16 @@ impl Beach {
         self.arcs[arc].start = start;
     }
     
-    pub fn center(&self, arc: Arc) -> Position {
+    pub fn center(&self, arc: Arc) -> Option<Position> {
         self.arcs[arc].center
     }
 
-    pub fn attach(&mut self, arc: Arc, center: Position) {
-        let data = &mut self.arcs[arc];
-        data.is_valid = true;
-        data.center = center;
+    pub fn attach_circle(&mut self, arc: Arc, center: Position) {
+        self.arcs[arc].center = Some(center);
     }
 
-    pub fn detach(&mut self, arc: Arc) {
-        self.arcs[arc].is_valid = false;
+    pub fn detach_circle(&mut self, arc: Arc) {
+        self.arcs[arc].center = None;
     }
 
     pub fn next(&self, arc: Arc) -> Arc {
