@@ -1,14 +1,15 @@
 use std::collections::BinaryHeap;
 use cgmath::InnerSpace;
 use ideal::{Id, IdVec};
-use point::Point;
-use events::{Event, EventKind};
+use point::{Point, Position};
+use events::{SiteEvent, CircleEvent};
 use beach::{Beach, Arc, Start};
-use diagram::{Diagram, Vertex, Cell};
+use diagram::{Diagram, Vertex};
 
 #[derive(Default)]
 struct Builder {
-    events: BinaryHeap<Event>,
+    circle_events: BinaryHeap<CircleEvent>,
+    site_events: Vec<SiteEvent>,
     beach: Beach,
     diagram: Diagram,
     starts: IdVec<Start>,
@@ -18,10 +19,8 @@ impl Builder {
     fn new(points: &[Point]) -> Self {
         let mut builder = Builder::default();
         for &point in points {
-            let cell = builder.diagram.add_cell(point);
-            builder.events.push(Event {
-                theta: point.theta.value,
-                kind: EventKind::Site(cell),
+            builder.site_events.push(SiteEvent {
+                point: point,
             });
         }
         builder
@@ -38,52 +37,71 @@ impl Builder {
     }   
 
     fn build_iter(&mut self) {
-        while let Some(event) = self.events.pop() {
-            //println!("{:?}", event);
-            match event.kind {
-                EventKind::Site(cell) => self.site_event(cell),
-                EventKind::Circle(arc) => self.circle_event(arc, event.theta),
+        self.site_events.sort();
+        loop {
+            match (self.site_events.is_empty(), self.circle_events.is_empty()) {
+                (true, true) => break,
+                (true, false) => self.circle_event(),
+                (false, true) => self.site_event(),
+                (false, false) => if self.site_events[self.site_events.len() - 1].point.theta.value < self.circle_events.peek().unwrap().theta {
+                    self.site_event()
+                } else {
+                    self.circle_event()
+                }
             }
         }
     }
 
     fn reset(&mut self) {
-        self.diagram.reset();
-        self.events.clear();
+        self.site_events.clear();
+        self.circle_events.clear();
         self.starts.clear();
         self.beach.clear();
         for cell in self.diagram.cells() {
-            self.events.push(Event {
-                theta: self.diagram.cell_point(cell).theta.value,
-                kind: EventKind::Site(cell)
+            self.site_events.push(SiteEvent {
+                point: Point::from(self.diagram.center(cell)),
             });
         }
+        self.diagram.clear();
     }
 
-    fn arc_point(&self, arc: Arc) -> &Point {
-        self.diagram.cell_point(self.beach.cell(arc))
+    fn finish(&mut self) {
+        for edge in self.diagram.edges() {
+            let mut common = Vec::new(); 
+            let (vertex0, vertex1) = self.diagram.edge_vertices(edge);  
+            for &cell0 in self.diagram.vertex_cells(vertex0) {
+                for &cell1 in self.diagram.vertex_cells(vertex1) {
+                    if cell0 == cell1 {
+                        common.push(cell0);
+                    }
+                }
+            }
+            assert_eq!(common.len(), 2);
+            self.diagram.set_edge_cells(edge, common[0], common[1]);
+        }
+        // for vertex in self.diagram.vertices() {
+        //     assert_eq!(self.diagram.vertex_cells(vertex).len(), 3);
+        //     assert_eq!(self.diagram.vertex_edges(vertex).len(), 3);
+        // }
     }
 
-    fn create_temporary(&mut self, arc0: Arc, arc1: Arc) {
-        let start = self.starts.push(Start { vertex: Id::invalid() });
-        self.beach.set_start(arc0, start);
-        self.beach.set_start(arc1, start);
-    }
-
-    fn site_event(&mut self, cell: Cell) {
+    fn site_event(&mut self) {
+        let SiteEvent { point } = self.site_events.pop().unwrap();
+        let cell = self.diagram.add_cell(point);
         let arc = self.beach.insert(cell, &self.diagram);
         let (prev, next) = self.beach.neighbors(arc);
         if prev != arc {
             self.create_temporary(prev, arc);
             if prev != next {
-                let theta = self.diagram.cell_point(cell).theta.value;
-                self.attach_circle(prev, theta);
-                self.attach_circle(next, theta);
+                self.beach.detach_circle(prev);
+                self.attach_circle(prev, point.theta.value);
+                self.attach_circle(next, point.theta.value);
             }
         }
     }
 
-    fn circle_event(&mut self, arc: Arc, theta: f64) {
+    fn circle_event(&mut self) {
+        let CircleEvent { arc, theta } = self.circle_events.pop().unwrap();
         if let Some(center) = self.beach.center(arc) {
             let (prev, next) = self.beach.neighbors(arc);
             self.beach.detach_circle(arc);
@@ -106,7 +124,13 @@ impl Builder {
             }
         }
     }
-    
+
+    fn create_temporary(&mut self, arc0: Arc, arc1: Arc) {
+        let start = self.starts.push(Start { vertex: Id::invalid() });
+        self.beach.set_start(arc0, start);
+        self.beach.set_start(arc1, start);
+    }
+
     fn create_edge(&mut self, arc: Arc, end: Vertex) {
         let start = self.beach.start(arc);
         if start.is_valid() {
@@ -121,16 +145,16 @@ impl Builder {
     
     fn attach_circle(&mut self, arc: Arc, min: f64) -> bool {
         let (prev, next) = self.beach.neighbors(arc);
-        let position = self.arc_point(arc).position;
-        let from_prev = self.arc_point(prev).position - position;
-        let from_next = self.arc_point(next).position - position;
+        let position = self.arc_position(arc);
+        let from_prev = self.arc_position(prev) - position;
+        let from_next = self.arc_position(next) - position;
         let center = from_prev.cross(from_next).normalize();
         let theta = center.z.acos() + center.dot(position).acos();
         if theta >= min {
             self.beach.attach_circle(arc, center);
-            self.events.push(Event {
+            self.circle_events.push(CircleEvent {
                 theta: theta,
-                kind: EventKind::Circle(arc),
+                arc: arc,
             });
             true
         } else {
@@ -138,24 +162,8 @@ impl Builder {
         }
     }
     
-    fn finish(&mut self) {
-        for edge in self.diagram.edges() {
-            let mut common = Vec::new(); 
-            let (vertex0, vertex1) = self.diagram.edge_vertices(edge);  
-            for &cell0 in self.diagram.vertex_cells(vertex0) {
-                for &cell1 in self.diagram.vertex_cells(vertex1) {
-                    if cell0 == cell1 {
-                        common.push(cell0);
-                    }
-                }
-            }
-            assert_eq!(common.len(), 2);
-            self.diagram.set_edge_cells(edge, common[0], common[1]);
-        }
-        for vertex in self.diagram.vertices() {
-            assert_eq!(self.diagram.vertex_cells(vertex).len(), 3);
-            assert_eq!(self.diagram.vertex_edges(vertex).len(), 3);
-        }
+    fn arc_position(&self, arc: Arc) -> Position {
+        self.diagram.cell_point(self.beach.cell(arc)).position
     }
 }
 

@@ -126,11 +126,7 @@ impl Diagram {
 
     pub fn compute_centers(&mut self) {
         for cell in self.cells() {
-            let mut position = Position::new(0.0, 0.0, 0.0);
-            for vertex in self.cell_vertices(cell) {
-                position += self.vertex_position(*vertex);
-            }
-            self.cells[cell].point = Point::from(position / (self.vertices.len() as f64));
+            self.cells[cell].point = Point::from(self.center(cell));
         }
     }
 
@@ -141,6 +137,14 @@ impl Diagram {
         for cell in self.cells() {
             self.cells[cell].vertices.clear();
         }
+    }
+
+    pub fn center(&self, cell: Cell) -> Position {
+        let mut position = Position::new(0.0, 0.0, 0.0);
+        for vertex in self.cell_vertices(cell) {
+            position += self.vertex_position(*vertex);
+        }
+        position / (self.vertices.len() as f64)
     }
 
     pub fn cell_point(&self, cell: Cell) -> &Point {
@@ -160,6 +164,12 @@ impl Diagram {
             .iter()
             .map(|&edge| self.other_edge_cell(edge, cell))
             .collect()
+    }
+
+    pub fn clear(&mut self) {
+        self.vertices.clear();
+        self.edges.clear();
+        self.cells.clear();
     }
 }
 
