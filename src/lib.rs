@@ -9,5 +9,5 @@ mod diagram;
 mod point;
 
 pub use diagram::*;
-pub use point::*;
+pub use point::Position;
 pub use voronoi::build;

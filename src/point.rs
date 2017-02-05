@@ -1,4 +1,5 @@
 use std::fmt;
+use std::cmp::Ordering;
 use cgmath::{Vector3, InnerSpace};
 
 pub type Position = Vector3<f64>;
@@ -45,3 +46,23 @@ impl From<Position> for Point {
         }
     }
 }
+
+impl PartialOrd for Point {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.theta.value.partial_cmp(&other.theta.value)
+    }
+}
+
+impl Ord for Point {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl PartialEq for Point {
+    fn eq(&self, other: &Self) -> bool {
+        self.theta.value == other.theta.value
+    }
+}
+
+impl Eq for Point {}

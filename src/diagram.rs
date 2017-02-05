@@ -1,6 +1,6 @@
 use ideal::{Id, IdVec};
 use ideal::vec::IdsIter;
-use point::{Point, Position};
+use point::Position;
 
 pub struct VertexData {
     position: Position,
@@ -14,7 +14,6 @@ pub struct EdgeData {
 }
 
 pub struct CellData {
-    point: Point,
     vertices: Vec<Vertex>,
     edges: Vec<Edge>,
 }
@@ -112,9 +111,8 @@ impl Diagram {
         }
     }
 
-    pub fn add_cell(&mut self, point: Point) -> Cell {
+    pub fn add_cell(&mut self) -> Cell {
         self.cells.push(CellData {
-            point: point,
             vertices: Vec::new(),
             edges: Vec::new(),
         })
@@ -124,31 +122,12 @@ impl Diagram {
         self.cells.ids()
     }
 
-    pub fn compute_centers(&mut self) {
-        for cell in self.cells() {
-            self.cells[cell].point = Point::from(self.center(cell));
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.compute_centers();
-        self.vertices.clear();
-        self.edges.clear();
-        for cell in self.cells() {
-            self.cells[cell].vertices.clear();
-        }
-    }
-
     pub fn center(&self, cell: Cell) -> Position {
         let mut position = Position::new(0.0, 0.0, 0.0);
         for vertex in self.cell_vertices(cell) {
             position += self.vertex_position(*vertex);
         }
         position / (self.vertices.len() as f64)
-    }
-
-    pub fn cell_point(&self, cell: Cell) -> &Point {
-        &self.cells[cell].point
     }
 
     pub fn cell_vertices(&self, cell: Cell) -> &[Vertex] {

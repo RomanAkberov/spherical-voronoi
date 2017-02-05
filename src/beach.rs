@@ -1,7 +1,7 @@
 use std::f64::consts::{PI, FRAC_1_PI};
 use ideal::Id;
 use red_black_tree::{RedBlackTree, Node};
-use diagram::{Diagram, Vertex, Cell};
+use diagram::{Vertex, Cell};
 use point::{Point, Position};
 
 pub struct Start {
@@ -23,16 +23,16 @@ pub struct Beach {
 }
 
 impl Beach {
-    pub fn insert(&mut self, cell: Cell, diagram: &Diagram) -> Arc {
+    pub fn insert(&mut self, cell: Cell, site_events: &[Point]) -> Arc {
         let root = self.arcs.root();
         if self.arcs.len() > 1 {
-            let point = diagram.cell_point(cell);
+            let point = &site_events[cell.index()];
             let mut arc = root;
             let mut use_tree = true;
             loop {
                 let prev = self.prev(arc);
-                let start = self.intersect_with_next(prev, point, diagram);
-                let end = self.intersect_with_next(arc, point, diagram);
+                let start = self.intersect_with_next(prev, point, site_events);
+                let end = self.intersect_with_next(arc, point, site_events);
                 if start > end {
                     let twin = {
                         let cell = self.cell(arc);
@@ -74,9 +74,9 @@ impl Beach {
         }
     }
     
-    fn intersect_with_next(&mut self, arc: Arc, point: &Point, diagram: &Diagram) -> f64 {
-        let arc_point = diagram.cell_point(self.cell(arc));
-        let next_point = diagram.cell_point(self.cell(self.next(arc)));
+    fn intersect_with_next(&mut self, arc: Arc, point: &Point, site_events: &[Point]) -> f64 {
+        let arc_point = &site_events[self.cell(arc).index()];
+        let next_point = &site_events[self.cell(self.next(arc)).index()];
         let data = &mut self.arcs[arc];
         if data.scan < point.theta.value {
             data.scan = point.theta.value;
