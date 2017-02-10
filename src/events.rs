@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use beach::Arc;
+use beach_line::Arc;
 
 #[derive(Debug)]
 pub struct CircleEvent {

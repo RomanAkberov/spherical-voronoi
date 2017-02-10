@@ -2,8 +2,7 @@ extern crate cgmath;
 extern crate ideal;
 
 mod events;
-mod beach;
-mod red_black_tree;
+mod beach_line;
 mod voronoi;
 mod diagram;
 mod point;

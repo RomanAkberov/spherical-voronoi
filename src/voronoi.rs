@@ -3,14 +3,14 @@ use cgmath::InnerSpace;
 use ideal::{Id, IdVec};
 use point::{Point, Position};
 use events::CircleEvent;
-use beach::{Beach, Arc, Start};
+use beach_line::{BeachLine, Arc, Start};
 use diagram::{Diagram, Vertex};
 
 #[derive(Default)]
 struct Builder {
     circle_events: BinaryHeap<CircleEvent>,
     site_events: Vec<Point>,
-    beach: Beach,
+    beach: BeachLine,
     diagram: Diagram,
     starts: IdVec<Start>,
 }
@@ -24,7 +24,7 @@ impl Builder {
         builder
     }
     
-    pub fn build(mut self, relaxations: usize) -> Diagram {
+    fn build(mut self, relaxations: usize) -> Diagram {
         self.build_iter();
         for _ in 1..relaxations {
             self.reset();
@@ -75,10 +75,10 @@ impl Builder {
             assert_eq!(common.len(), 2);
             self.diagram.set_edge_cells(edge, common[0], common[1]);
         }
-        // for vertex in self.diagram.vertices() {
-        //     assert_eq!(self.diagram.vertex_cells(vertex).len(), 3);
-        //     assert_eq!(self.diagram.vertex_edges(vertex).len(), 3);
-        // }
+        for vertex in self.diagram.vertices() {
+            assert_eq!(self.diagram.vertex_cells(vertex).len(), 3);
+            assert_eq!(self.diagram.vertex_edges(vertex).len(), 3);
+        }
     }
 
     fn site_event(&mut self) {
@@ -89,7 +89,6 @@ impl Builder {
         if prev != arc {
             self.create_temporary(prev, arc);
             if prev != next {
-                self.beach.detach_circle(prev);
                 self.attach_circle(prev, point.theta.value);
                 self.attach_circle(next, point.theta.value);
             }
