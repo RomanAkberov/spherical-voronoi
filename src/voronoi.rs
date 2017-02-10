@@ -1,25 +1,24 @@
 use std::collections::BinaryHeap;
-use cgmath::InnerSpace;
+use cgmath::{Vector3, InnerSpace};
 use ideal::{Id, IdVec};
-use point::{Point, Position};
-use events::CircleEvent;
+use event::{SiteEvent, CircleEvent};
 use beach_line::{BeachLine, Arc, Start};
 use diagram::{Diagram, Vertex};
 
 #[derive(Default)]
 struct Builder {
     circle_events: BinaryHeap<CircleEvent>,
-    site_events: Vec<Point>,
+    sites: Vec<SiteEvent>,
     beach: BeachLine,
     diagram: Diagram,
     starts: IdVec<Start>,
 }
 
 impl Builder {
-    fn new(positions: &[Position]) -> Self {
+    fn new(positions: &[Vector3<f64>]) -> Self {
         let mut builder = Builder::default();
         for &position in positions {
-            builder.site_events.push(Point::from(position));
+            builder.sites.push(SiteEvent::from(position));
         }
         builder
     }
@@ -35,14 +34,14 @@ impl Builder {
     }   
 
     fn build_iter(&mut self) {
-        self.site_events.sort();
+        self.sites.sort();
         loop {
-            match (self.diagram.cells().len() >= self.site_events.len(), self.circle_events.is_empty()) {
+            match (self.diagram.cells().len() >= self.sites.len(), self.circle_events.is_empty()) {
                 (true, true) => break,
                 (true, false) => self.circle_event(),
-                (false, true) => self.site_event(),
-                (false, false) => if self.site_events[self.diagram.cells().len()].theta.value < self.circle_events.peek().unwrap().theta {
-                    self.site_event()
+                (false, true) => self.site(),
+                (false, false) => if self.sites[self.diagram.cells().len()].theta.value < self.circle_events.peek().unwrap().theta {
+                    self.site()
                 } else {
                     self.circle_event()
                 }
@@ -51,12 +50,12 @@ impl Builder {
     }
 
     fn reset(&mut self) {
-        self.site_events.clear();
+        self.sites.clear();
         self.circle_events.clear();
         self.starts.clear();
         self.beach.clear();
         for cell in self.diagram.cells() {
-            self.site_events.push(Point::from(self.diagram.center(cell)));
+            self.sites.push(SiteEvent::from(self.diagram.center(cell)));
         }
         self.diagram.clear();
     }
@@ -81,16 +80,16 @@ impl Builder {
         }
     }
 
-    fn site_event(&mut self) {
-        let point = self.site_events[self.diagram.cells().len()];
+    fn site(&mut self) {
+        let theta = self.sites[self.diagram.cells().len()].theta.value;
         let cell = self.diagram.add_cell();
-        let arc = self.beach.insert(cell, &self.site_events);
+        let arc = self.beach.insert(cell, &self.sites);
         let (prev, next) = self.beach.neighbors(arc);
         if prev != arc {
             self.create_temporary(prev, arc);
             if prev != next {
-                self.attach_circle(prev, point.theta.value);
-                self.attach_circle(next, point.theta.value);
+                self.attach_circle(prev, theta);
+                self.attach_circle(next, theta);
             }
         }
     }
@@ -157,11 +156,11 @@ impl Builder {
         }
     }
     
-    fn arc_position(&self, arc: Arc) -> Position {
-        self.site_events[self.beach.cell(arc).index()].position
+    fn arc_position(&self, arc: Arc) -> Vector3<f64> {
+        self.sites[self.beach.cell(arc).index()].position
     }
 }
 
-pub fn build(positions: &[Position], relaxations: usize) -> Diagram {
+pub fn build(positions: &[Vector3<f64>], relaxations: usize) -> Diagram {
     Builder::new(positions).build(relaxations)
 }

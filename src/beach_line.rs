@@ -1,7 +1,8 @@
 use std::f64::consts::{PI, FRAC_1_PI};
+use cgmath::Vector3;
 use ideal::{Id, IdVec};
+use event::SiteEvent;
 use diagram::{Vertex, Cell};
-use point::{Point, Position};
 
 const HEIGHT: usize = 8;
 
@@ -14,7 +15,7 @@ pub struct Start {
 pub struct ArcData {
     cell: Cell,
     start: Id<Start>,
-    center: Option<Position>,
+    center: Option<Vector3<f64>>,
     scan: f64,
     end: f64,
     prev: Arc,
@@ -34,16 +35,16 @@ pub struct BeachLine {
 }
 
 impl BeachLine {
-    pub fn insert(&mut self, cell: Cell, site_events: &[Point]) -> Arc {
+    pub fn insert(&mut self, cell: Cell, sites: &[SiteEvent]) -> Arc {
         if self.len > 1 {
             let mut current = self.head;
             let mut level = HEIGHT - 1;
             let mut skips = [Arc::invalid(); HEIGHT];
-            let point = &site_events[cell.index()];
+            let site = &sites[cell.index()];
             loop {
                 let next_skip = self.next_skip(current, level);
-                let start = self.intersect_with_next(current, point, site_events);
-                let end = self.intersect_with_next(next_skip, point, site_events);
+                let start = self.intersect_with_next(current, site, sites);
+                let end = self.intersect_with_next(next_skip, site, sites);
                 if start < end {
                     current = next_skip;
                 } else {
@@ -56,12 +57,12 @@ impl BeachLine {
                 }
             }
             let mut next = self.next(current);
-            let mut start = self.intersect_with_next(current, point, site_events);
-            let mut end = self.intersect_with_next(next, point, site_events);
+            let mut start = self.intersect_with_next(current, site, sites);
+            let mut end = self.intersect_with_next(next, site, sites);
             while start < end {
                 next = self.next(next);
                 start = end;
-                end = self.intersect_with_next(next, point, site_events);
+                end = self.intersect_with_next(next, site, sites);
             }
             current = next;
             let current_cell = self.cell(current);
@@ -116,12 +117,12 @@ impl BeachLine {
         })
     }
 
-    // fn range_end(&mut self, arc1: Arc, arc2: Arc, point: &Point, diagram: &Diagram) -> f64 {
-    //     if self.arcs[arc1].scan < point.theta.value {
-    //         self.arcs[arc1].end = self.intersect_with_next(arc1, point, diagram);
-    //         self.arcs[arc2].end = self.intersect_with_next(arc2, point, diagram);
-    //         self.arcs[arc1].scan = point.theta.value;
-    //         self.arcs[arc2].scan = point.theta.value;
+    // fn range_end(&mut self, arc1: Arc, arc2: Arc, site: &SiteEvent, diagram: &Diagram) -> f64 {
+    //     if self.arcs[arc1].scan < site.theta.value {
+    //         self.arcs[arc1].end = self.intersect_with_next(arc1, site, diagram);
+    //         self.arcs[arc2].end = self.intersect_with_next(arc2, site, diagram);
+    //         self.arcs[arc1].scan = site.theta.value;
+    //         self.arcs[arc2].scan = site.theta.value;
     //     }
     //     self.arcs[arc1].end
     // }
@@ -161,30 +162,33 @@ impl BeachLine {
         }
     }
 
-    fn intersect_with_next(&mut self, arc: Arc, point: &Point, site_events: &[Point]) -> f64 {
-        let arc_point = &site_events[self.cell(arc).index()];
-        let next_point = &site_events[self.cell(self.next(arc)).index()];
+    fn intersect_with_next(&mut self, arc: Arc, site: &SiteEvent, sites: &[SiteEvent]) -> f64 {
+        let arc_point = &sites[self.cell(arc).index()];
+        let next_point = &sites[self.cell(self.next(arc)).index()];
         let data = &mut self.arcs[arc];
-        if data.scan < point.theta.value {
-            data.scan = point.theta.value;
-            data.end = BeachLine::intersect(arc_point, next_point, point);
+        if data.scan < site.theta.value {
+            data.scan = site.theta.value;
+            data.end = BeachLine::intersect(arc_point, next_point, site);
         }
         data.end
     }
 
-    fn intersect(point0: &Point, point1: &Point, point2: &Point) -> f64 {
-        let u1 = (point2.theta.cos - point1.theta.cos) * point0.theta.sin;
-        let u2 = (point2.theta.cos - point0.theta.cos) * point1.theta.sin;
-        let a = u1 * point0.phi.cos - u2 * point1.phi.cos;
-        let b = u1 * point0.phi.sin - u2 * point1.phi.sin;
-        let c = (point0.theta.cos - point1.theta.cos) * point2.theta.sin;
+    fn intersect(site0: &SiteEvent, site1: &SiteEvent, site2: &SiteEvent) -> f64 {
+        let u1 = (site2.theta.cos - site1.theta.cos) * site0.theta.sin;
+        let u2 = (site2.theta.cos - site0.theta.cos) * site1.theta.sin;
+        let a = u1 * site0.phi.cos - u2 * site1.phi.cos;
+        let b = u1 * site0.phi.sin - u2 * site1.phi.sin;
+        let c = (site0.theta.cos - site1.theta.cos) * site2.theta.sin;
         let length = (a * a + b * b).sqrt();
         let gamma = a.atan2(b);
         let phi_plus_gamma = (c / length).asin();
-        let mut angle = phi_plus_gamma - gamma + 2.0 * PI - point2.phi.value;
-        angle *= 0.5 * FRAC_1_PI;
-        angle -= angle.floor();
-        angle * 2.0 * PI
+        BeachLine::wrap(phi_plus_gamma - gamma - site2.phi.value)
+    }
+
+    fn wrap(mut phi: f64) -> f64 {
+        phi *= 0.5 * FRAC_1_PI;
+        phi -= phi.floor();
+        phi * 2.0 * PI
     }
 
     pub fn insert_after(&mut self, prev: Arc, arc: Arc) {
@@ -265,11 +269,11 @@ impl BeachLine {
         self.arcs[arc].start = start;
     }
     
-    pub fn center(&self, arc: Arc) -> Option<Position> {
+    pub fn center(&self, arc: Arc) -> Option<Vector3<f64>> {
         self.arcs[arc].center
     }
 
-    pub fn attach_circle(&mut self, arc: Arc, center: Position) {
+    pub fn attach_circle(&mut self, arc: Arc, center: Vector3<f64>) {
         self.arcs[arc].center = Some(center);
     }
 
