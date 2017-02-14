@@ -1,24 +1,24 @@
 use std::collections::BinaryHeap;
 use cgmath::{Vector3, InnerSpace};
-use ideal::{Id, IdVec};
+use ideal::IdVec;
 use event::{SiteEvent, CircleEvent};
-use beach_line::{BeachLine, Arc, Start};
+use beach_line::{BeachLine, Arc};
 use diagram::{Diagram, Vertex};
 
 #[derive(Default)]
 struct Builder {
     circle_events: BinaryHeap<CircleEvent>,
-    sites: Vec<SiteEvent>,
+    site_events: Vec<SiteEvent>,
     beach: BeachLine,
     diagram: Diagram,
-    starts: IdVec<Start>,
+    starts: IdVec<Vertex>,
 }
 
 impl Builder {
     fn new(positions: &[Vector3<f64>]) -> Self {
         let mut builder = Builder::default();
         for &position in positions {
-            builder.sites.push(SiteEvent::from(position));
+            builder.site_events.push(SiteEvent::from(position));
         }
         builder
     }
@@ -34,14 +34,14 @@ impl Builder {
     }   
 
     fn build_iter(&mut self) {
-        self.sites.sort();
+        self.site_events.sort();
         loop {
-            match (self.diagram.cells().len() >= self.sites.len(), self.circle_events.is_empty()) {
+            match (self.diagram.cells().len() >= self.site_events.len(), self.circle_events.is_empty()) {
                 (true, true) => break,
                 (true, false) => self.circle_event(),
-                (false, true) => self.site(),
-                (false, false) => if self.sites[self.diagram.cells().len()].theta.value < self.circle_events.peek().unwrap().theta {
-                    self.site()
+                (false, true) => self.site_event(),
+                (false, false) => if self.site_events[self.diagram.cells().len()].theta.value < self.circle_events.peek().unwrap().theta {
+                    self.site_event()
                 } else {
                     self.circle_event()
                 }
@@ -50,12 +50,12 @@ impl Builder {
     }
 
     fn reset(&mut self) {
-        self.sites.clear();
+        self.site_events.clear();
         self.circle_events.clear();
         self.starts.clear();
         self.beach.clear();
         for cell in self.diagram.cells() {
-            self.sites.push(SiteEvent::from(self.diagram.center(cell)));
+            self.site_events.push(SiteEvent::from(self.diagram.center(cell)));
         }
         self.diagram.clear();
     }
@@ -80,10 +80,11 @@ impl Builder {
         }
     }
 
-    fn site(&mut self) {
-        let theta = self.sites[self.diagram.cells().len()].theta.value;
+    fn site_event(&mut self) {
+        //println!("site");
+        let theta = self.site_events[self.diagram.cells().len()].theta.value;
         let cell = self.diagram.add_cell();
-        let arc = self.beach.insert(cell, &self.sites);
+        let arc = self.beach.insert(cell, &self.site_events);
         let (prev, next) = self.beach.neighbors(arc);
         if prev != arc {
             self.create_temporary(prev, arc);
@@ -95,6 +96,7 @@ impl Builder {
     }
 
     fn circle_event(&mut self) {
+        //println!("circle");
         let CircleEvent { arc, theta } = self.circle_events.pop().unwrap();
         if let Some(center) = self.beach.center(arc) {
             let (prev, next) = self.beach.neighbors(arc);
@@ -102,6 +104,7 @@ impl Builder {
             self.beach.detach_circle(prev);
             self.beach.detach_circle(next);
             let vertex = self.diagram.add_vertex(center, [self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
+            //println!("vertex");
             self.create_edge(prev, vertex);
             self.create_edge(arc, vertex);
             self.beach.remove(arc);
@@ -111,7 +114,7 @@ impl Builder {
                 self.beach.remove(next);
             } else {
                 if self.attach_circle(prev, theta) {
-                    let start = self.starts.push(Start { vertex: vertex });
+                    let start = self.starts.push(vertex);
                     self.beach.set_start(prev, start);
                 }
                 self.attach_circle(next, theta);
@@ -120,7 +123,7 @@ impl Builder {
     }
 
     fn create_temporary(&mut self, arc0: Arc, arc1: Arc) {
-        let start = self.starts.push(Start { vertex: Id::invalid() });
+        let start = self.starts.push(Vertex::invalid());
         self.beach.set_start(arc0, start);
         self.beach.set_start(arc1, start);
     }
@@ -128,11 +131,12 @@ impl Builder {
     fn create_edge(&mut self, arc: Arc, end: Vertex) {
         let start = self.beach.start(arc);
         if start.is_valid() {
-            let vertex = self.starts[start].vertex;
+            let vertex = self.starts[start];
             if vertex.is_valid() {
+                //println!("edge");
                 self.diagram.add_edge(vertex, end);
             } else {
-                self.starts[start].vertex = end;
+                self.starts[start] = end;
             }
         }
     }
@@ -143,8 +147,10 @@ impl Builder {
         let from_prev = self.arc_position(prev) - position;
         let from_next = self.arc_position(next) - position;
         let center = from_prev.cross(from_next).normalize();
+        //println!("{:?} {:?} {:?}", center, center.z.acos(), center.dot(position).acos());
         let theta = center.z.acos() + center.dot(position).acos();
         if theta >= min {
+            //println!("{} {} -> circle", theta, min);
             self.beach.attach_circle(arc, center);
             self.circle_events.push(CircleEvent {
                 theta: theta,
@@ -152,12 +158,13 @@ impl Builder {
             });
             true
         } else {
+            //println!("{} {} -> nope", theta, min);
             false
         }
     }
     
     fn arc_position(&self, arc: Arc) -> Vector3<f64> {
-        self.sites[self.beach.cell(arc).index()].position
+        self.site_events[self.beach.cell(arc).index()].position
     }
 }
 

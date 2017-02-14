@@ -4,17 +4,12 @@ use ideal::{Id, IdVec};
 use event::SiteEvent;
 use diagram::{Vertex, Cell};
 
-const HEIGHT: usize = 8;
-
-#[derive(Debug)]
-pub struct Start {
-    pub vertex: Vertex,
-}
+const HEIGHT: usize = 5;
 
 #[derive(Debug)]
 pub struct ArcData {
     cell: Cell,
-    start: Id<Start>,
+    start: Id<Vertex>,
     center: Option<Vector3<f64>>,
     scan: f64,
     end: f64,
@@ -80,7 +75,7 @@ impl BeachLine {
             self.insert_after(head, new);
             let height = self.insertion_height();
             self.levels[height - 1] += 1;
-            for level in 0..height {;
+            for level in 0..height {
                 self.set_prev_skip(new, level, head);
                 self.set_next_skip(new, level, head);
                 self.set_prev_skip(head, level, new);
@@ -231,15 +226,10 @@ impl BeachLine {
         self.arcs[prev].next = next;
         self.arcs[next].prev = prev;
         self.len -= 1;
-        if self.len > 1 {
-            assert_eq!(self.height(self.head), HEIGHT);
-            assert_ne!(self.levels[HEIGHT - 1], 0);
-        }
     }
 
     fn remove_skips(&mut self, arc: Arc) {
         let height = self.height(arc);
-        assert!(self.levels[height - 1] > 0);
         for level in 0..height {
             let (prev_skip, next_skip) = self.skips(arc, level);
             self.set_prev_skip(next_skip, level, prev_skip);
@@ -261,11 +251,11 @@ impl BeachLine {
         self.arcs[arc].cell
     }
     
-    pub fn start(&self, arc: Arc) -> Id<Start> {
+    pub fn start(&self, arc: Arc) -> Id<Vertex> {
         self.arcs[arc].start    
     }
     
-    pub fn set_start(&mut self, arc: Arc, start: Id<Start>) {
+    pub fn set_start(&mut self, arc: Arc, start: Id<Vertex>) {
         self.arcs[arc].start = start;
     }
     
