@@ -64,30 +64,14 @@ impl BeachLine {
             let current_cell = self.cell(current);
             let twin = self.create_arc(current_cell);
             let prev = self.prev(current);  
-            self.insert_between(twin, prev, current);
-            self.insert_between(new, twin, current);
-            self.add_skips(new, &mut skips);
-            self.add_skips(twin, &mut skips);
-        } else if self.len > 0 {
-            let head = self.head;
-            self.insert_between(new, head, head);
-            let height = self.insertion_height();
-            self.levels[height - 1] += 1;
-            for level in 0..height {
-                self.set_prev_skip(new, level, head);
-                self.set_next_skip(new, level, head);
-                self.set_prev_skip(head, level, new);
-                self.set_next_skip(head, level, new);
-            }
+            self.add_links(twin, prev, current, &mut skips);
+            self.add_links(new, twin, current, &mut skips);
         } else {
-            self.insert_between(new, new, new);
-            {
-                let data = &mut self.arcs[new];
-                data.prev_skips = [new; HEIGHT];
-                data.next_skips = [new; HEIGHT];
+            if self.len == 0 {
+                self.head = new;
             }
-            self.head = new;
-            self.levels[HEIGHT - 1] += 1;
+            let head = self.head;
+            self.add_links(new, head, head, &mut [head; HEIGHT]);
         }
         new
     }
@@ -104,6 +88,7 @@ impl BeachLine {
             if next_skip != self.head {
                 self.head = next_skip;
             } else {
+                // promote next to HEIGHT
                 let next = self.next(self.head);
                 let height = self.height(next);
                 self.levels[height - 1] -= 1;
@@ -118,11 +103,7 @@ impl BeachLine {
                 self.head = next;
             }
         }
-        self.remove_skips(arc);
-        let (prev, next) = self.neighbors(arc);
-        self.arcs[prev].next = next;
-        self.arcs[next].prev = prev;
-        self.len -= 1;
+        self.remove_links(arc);
     }
 
     pub fn cell(&self, arc: Arc) -> Cell {
@@ -197,20 +178,6 @@ impl BeachLine {
         self.arcs[arc].next_skips[level] = next;
     }
 
-    fn add_skips(&mut self, arc: Arc, skips: &mut[Arc; HEIGHT]) {
-        let height = self.insertion_height();
-        self.levels[height - 1] += 1;
-        for level in 0..height {
-            let prev = skips[level];
-            let next = self.next_skip(prev, level);
-            self.set_prev_skip(arc, level, prev);
-            self.set_next_skip(arc, level, next);
-            self.set_prev_skip(next, level, arc);
-            self.set_next_skip(prev, level, arc);
-            skips[level] = arc;
-        }
-    }
-
     fn intersect_with_next(&mut self, arc: Arc, site: &SiteEvent, sites: &[SiteEvent]) -> f64 {
         let arc_point = &sites[self.cell(arc).index()];
         let next_point = &sites[self.cell(self.next(arc)).index()];
@@ -240,21 +207,39 @@ impl BeachLine {
         phi * 2.0 * PI
     }
 
-    fn insert_between(&mut self, arc: Arc, prev: Arc, next: Arc) {
+    fn add_links(&mut self, arc: Arc, prev: Arc, next: Arc, skips: &mut [Arc; HEIGHT]) {
         self.arcs[arc].prev = prev;
         self.arcs[arc].next = next;
         self.arcs[prev].next = arc;
         self.arcs[next].prev = arc;
+        let height = self.insertion_height();
+        for level in 0..height {
+            let prev = skips[level];
+            let mut next = self.next_skip(prev, level);
+            if next.is_invalid() {
+                next = prev;
+            }
+            self.set_prev_skip(arc, level, prev);
+            self.set_next_skip(arc, level, next);
+            self.set_prev_skip(next, level, arc);
+            self.set_next_skip(prev, level, arc);
+            skips[level] = arc;
+        }
         self.len += 1;
+        self.levels[height - 1] += 1;
     }
 
-    fn remove_skips(&mut self, arc: Arc) {
+    fn remove_links(&mut self, arc: Arc) {
+        let (prev, next) = self.neighbors(arc);
+        self.arcs[prev].next = next;
+        self.arcs[next].prev = prev;
         let height = self.height(arc);
         for level in 0..height {
             let (prev_skip, next_skip) = self.skips(arc, level);
             self.set_prev_skip(next_skip, level, prev_skip);
             self.set_next_skip(prev_skip, level, next_skip);
         }
+        self.len -= 1;
         self.levels[height - 1] -= 1;
     }
 
@@ -268,6 +253,9 @@ impl BeachLine {
     }
 
     fn insertion_height(&self) -> usize {
+        if self.len == 0 {
+            return HEIGHT;
+        }
         let mut best_height = 1;
         let mut best_ratio = self.levels[0];
         let mut multiplier = 1;

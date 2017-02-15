@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use cgmath::{Vector3, InnerSpace};
 use ideal::{Id, IdVec};
 use ideal::vec::IdsIter;
 
@@ -123,11 +123,12 @@ impl Diagram {
     }
 
     pub fn center(&self, cell: Cell) -> Vector3<f64> {
-        let mut position = Vector3::new(0.0, 0.0, 0.0);
-        for vertex in self.cell_vertices(cell) {
-            position += self.vertex_position(*vertex);
+        let mut center = Vector3::new(0.0, 0.0, 0.0);
+        let cell_vertices = self.cell_vertices(cell);
+        for vertex in cell_vertices {
+            center += self.vertex_position(*vertex);
         }
-        position / (self.vertices.len() as f64)
+        center.normalize()
     }
 
     pub fn cell_vertices(&self, cell: Cell) -> &[Vertex] {
