@@ -1,15 +1,15 @@
 use std::f64::consts::{PI, FRAC_1_PI};
-use cgmath::Vector3;
 use ideal::{Id, IdVec};
 use event::SiteEvent;
 use diagram::Cell;
+use ::Position;
 
 const HEIGHT: usize = 5;
 
 #[derive(Debug)]
 pub struct ArcData {
     cell: Cell,
-    center: Option<Vector3<f64>>,
+    center: Option<Position>,
     scan: f64,
     end: f64,
     prev: Arc,
@@ -109,11 +109,11 @@ impl BeachLine {
         self.arcs[arc].cell
     }
 
-    pub fn center(&self, arc: Arc) -> Option<Vector3<f64>> {
+    pub fn center(&self, arc: Arc) -> Option<Position> {
         self.arcs[arc].center
     }
 
-    pub fn attach_circle(&mut self, arc: Arc, center: Vector3<f64>) {
+    pub fn attach_circle(&mut self, arc: Arc, center: Position) {
         self.arcs[arc].center = Some(center);
     }
 

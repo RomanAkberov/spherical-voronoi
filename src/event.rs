@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
-use cgmath::{Vector3, InnerSpace};
+use cgmath::InnerSpace;
 use beach_line::Arc;
+use ::Position;
 
 #[derive(Debug)]
 pub struct CircleEvent {
@@ -51,11 +52,11 @@ impl From<f64> for Angle {
 pub struct SiteEvent {
     pub theta: Angle,
     pub phi: Angle,
-    pub position: Vector3<f64>,
+    pub position: Position,
 }
 
-impl From<Vector3<f64>> for SiteEvent {
-    fn from(v: Vector3<f64>) -> Self {
+impl From<Position> for SiteEvent {
+    fn from(v: Position) -> Self {
         let position = v.normalize();
         let (theta, phi) = (position.z.acos(), position.y.atan2(position.x));
         SiteEvent {

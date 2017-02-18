@@ -1,9 +1,9 @@
-use cgmath::{Vector3, InnerSpace};
 use ideal::{Id, IdVec};
 use ideal::vec::IdsIter;
+use ::Position;
 
 pub struct VertexData {
-    position: Vector3<f64>,
+    position: Position,
     edges: Vec<Edge>,
     cells: [Cell; 3],
 }
@@ -26,7 +26,7 @@ pub struct Diagram {
 }
 
 impl Diagram {
-    pub fn add_vertex(&mut self, position: Vector3<f64>, cells: [Cell; 3]) -> Vertex {
+    pub fn add_vertex(&mut self, position: Position, cells: [Cell; 3]) -> Vertex {
         let vertex = self.vertices.push(VertexData {
             position: position,
             edges: Vec::new(),
@@ -42,7 +42,7 @@ impl Diagram {
         self.vertices.ids()
     }
 
-    pub fn vertex_position(&self, vertex: Vertex) -> Vector3<f64> {
+    pub fn vertex_position(&self, vertex: Vertex) -> Position {
         self.vertices[vertex].position
     }
 
@@ -122,15 +122,6 @@ impl Diagram {
 
     pub fn cells(&self) -> IdsIter<CellData> {
         self.cells.ids()
-    }
-
-    pub fn center(&self, cell: Cell) -> Vector3<f64> {
-        let mut center = Vector3::new(0.0, 0.0, 0.0);
-        let cell_vertices = self.cell_vertices(cell);
-        for vertex in cell_vertices {
-            center += self.vertex_position(*vertex);
-        }
-        center.normalize()
     }
 
     pub fn cell_vertices(&self, cell: Cell) -> &[Vertex] {

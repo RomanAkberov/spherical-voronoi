@@ -1,8 +1,9 @@
 use std::collections::BinaryHeap;
-use cgmath::{Vector3, InnerSpace};
+use cgmath::InnerSpace;
 use event::{SiteEvent, CircleEvent};
 use beach_line::{BeachLine, Arc};
 use generator::Generator;
+use ::Position;
 
 #[derive(Default)]
 struct Builder<G: Generator> {
@@ -14,7 +15,7 @@ struct Builder<G: Generator> {
 }
 
 impl<G: Generator> Builder<G> {
-    fn build<I: IntoIterator<Item=Vector3<f64>>>(mut self, positions: I) -> G::Result {
+    fn build<I: IntoIterator<Item=Position>>(mut self, positions: I) -> G::Result {
         self.site_events.extend(positions.into_iter().map(SiteEvent::from));
         self.site_events.sort();
         loop {
@@ -88,11 +89,11 @@ impl<G: Generator> Builder<G> {
         }
     }
     
-    fn arc_position(&self, arc: Arc) -> Vector3<f64> {
+    fn arc_position(&self, arc: Arc) -> Position {
         self.site_events[self.beach.cell(arc).index()].position
     }
 }
 
-pub fn build<G: Generator, I: IntoIterator<Item=Vector3<f64>>>(positions: I) -> G::Result {
+pub fn build<G: Generator, I: IntoIterator<Item=Position>>(positions: I) -> G::Result {
     Builder::<G>::default().build(positions)
 }

@@ -1,32 +1,33 @@
 use std::iter::Map;
 use std::vec::IntoIter;
-use cgmath::{Vector3, Zero};
+use cgmath::Zero;
 use ideal::{Id, IdVec};
 use diagram::{Diagram, Vertex, Cell};
 use beach_line::Arc;
+use ::Position;
 
 pub struct Centroid {
-    sum: Vector3<f64>,
+    sum: Position,
     count: f64,
 }
 
 impl Centroid {
     fn new() -> Self {
-        Centroid { sum: Vector3::zero(), count: 1.0 }
+        Centroid { sum: Position::zero(), count: 1.0 }
     }
 
-    pub fn position(self) -> Vector3<f64> {
+    pub fn position(self) -> Position {
         self.sum / self.count
     }
 }
 
-pub type Centroids = Map<IntoIter<Centroid>, fn(Centroid) -> Vector3<f64>>;
+pub type Centroids = Map<IntoIter<Centroid>, fn(Centroid) -> Position>;
 
 pub trait Generator: Default {
     type Result;
 
     fn result(self) -> Self::Result;
-    fn vertex(&mut self, position: Vector3<f64>, cell0: Cell, cell1: Cell, cell2: Cell) -> Vertex;
+    fn vertex(&mut self, position: Position, cell0: Cell, cell1: Cell, cell2: Cell) -> Vertex;
     fn start(&mut self, arc: Arc, vertex: Vertex);
     fn temporary(&mut self, arc: Arc, prev: Arc);
     fn edge(&mut self, arc: Arc, end: Vertex);
@@ -39,7 +40,7 @@ pub struct CentroidGenerator {
 }
 
 impl CentroidGenerator {
-    fn add_to_centroid(&mut self, cell: Cell, position: Vector3<f64>) {
+    fn add_to_centroid(&mut self, cell: Cell, position: Position) {
         let centroid = &mut self.centroids[cell.index()];
         centroid.count += 1.0;
         centroid.sum += position; 
@@ -53,7 +54,7 @@ impl Generator for CentroidGenerator {
         self.centroids.into_iter().map(Centroid::position)
     }
 
-    fn vertex(&mut self, position: Vector3<f64>, cell0: Cell, cell1: Cell, cell2: Cell) -> Vertex {
+    fn vertex(&mut self, position: Position, cell0: Cell, cell1: Cell, cell2: Cell) -> Vertex {
         self.add_to_centroid(cell0, position);
         self.add_to_centroid(cell1, position);
         self.add_to_centroid(cell2, position);
@@ -104,7 +105,7 @@ impl Generator for DiagramGenerator {
         self.diagram
     }
 
-    fn vertex(&mut self, position: Vector3<f64>, cell0: Cell, cell1: Cell, cell2: Cell) -> Vertex {
+    fn vertex(&mut self, position: Position, cell0: Cell, cell1: Cell, cell2: Cell) -> Vertex {
         self.diagram.add_vertex(position, [cell0, cell1, cell2])
     }
 
