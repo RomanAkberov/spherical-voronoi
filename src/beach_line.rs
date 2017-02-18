@@ -2,14 +2,13 @@ use std::f64::consts::{PI, FRAC_1_PI};
 use cgmath::Vector3;
 use ideal::{Id, IdVec};
 use event::SiteEvent;
-use diagram::{Vertex, Cell};
+use diagram::Cell;
 
 const HEIGHT: usize = 5;
 
 #[derive(Debug)]
 pub struct ArcData {
     cell: Cell,
-    start: Id<Vertex>,
     center: Option<Vector3<f64>>,
     scan: f64,
     end: f64,
@@ -109,15 +108,7 @@ impl BeachLine {
     pub fn cell(&self, arc: Arc) -> Cell {
         self.arcs[arc].cell
     }
-    
-    pub fn start(&self, arc: Arc) -> Id<Vertex> {
-        self.arcs[arc].start    
-    }
-    
-    pub fn set_start(&mut self, arc: Arc, start: Id<Vertex>) {
-        self.arcs[arc].start = start;
-    }
-    
+
     pub fn center(&self, arc: Arc) -> Option<Vector3<f64>> {
         self.arcs[arc].center
     }
@@ -140,17 +131,9 @@ impl BeachLine {
         self.arcs[arc].next
     }
 
-    pub fn clear(&mut self) {
-        self.arcs.clear();
-        self.head = Arc::invalid();
-        self.len = 0;
-        self.levels = [0; HEIGHT];
-    }
-
     fn create_arc(&mut self, cell: Cell) -> Arc {
         self.arcs.push(ArcData {
             cell: cell,
-            start: Id::invalid(),
             center: None,
             scan: -1.0,
             end: 0.0,

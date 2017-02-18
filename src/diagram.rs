@@ -147,12 +147,6 @@ impl Diagram {
             .map(|&edge| self.other_edge_cell(edge, cell))
             .collect()
     }
-
-    pub fn clear(&mut self) {
-        self.vertices.clear();
-        self.edges.clear();
-        self.cells.clear();
-    }
 }
 
 pub type Vertex = Id<VertexData>;
