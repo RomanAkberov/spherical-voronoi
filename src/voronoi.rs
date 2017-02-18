@@ -7,7 +7,7 @@ use diagram::{Diagram, Vertex, Cell};
 
 struct Center {
     sum: Vector3<f64>,
-    count: usize,
+    count: f64,
 }
 
 #[derive(Default)]
@@ -61,8 +61,8 @@ impl Builder {
         self.circle_events.clear();
         self.starts.clear();
         self.beach.clear();
-        for cell in self.diagram.cells() {
-            self.site_events.push(SiteEvent::from(self.diagram.center(cell)));
+        for center in &self.centers {
+            self.site_events.push(SiteEvent::from(center.sum / center.count));
         }
         self.centers.clear();
         self.diagram.clear();
@@ -73,7 +73,7 @@ impl Builder {
         let cell = self.diagram.add_cell();
         self.centers.push(Center {
             sum: Vector3::new(0.0, 0.0, 0.0),
-            count: 0,
+            count: 0.0,
         });
         let arc = self.beach.insert(cell, &self.site_events);
         let (prev, next) = self.beach.neighbors(arc);
@@ -189,7 +189,7 @@ impl Builder {
 
     fn add_to_center(&mut self, position: Vector3<f64>, arc: Arc) {
         let center = &mut self.centers[self.beach.cell(arc).index()];
-        center.count += 1;
+        center.count += 1.0;
         center.sum += position;
     }
 }
