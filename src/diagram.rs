@@ -61,13 +61,15 @@ impl Diagram {
             .collect()
     }
 
-    pub fn add_edge(&mut self, vertex0: Vertex, vertex1: Vertex) -> Edge {
+    pub fn add_edge(&mut self, vertex0: Vertex, vertex1: Vertex, cell0: Cell, cell1: Cell) -> Edge {
         let edge = self.edges.push(EdgeData {
             vertices: (vertex0, vertex1),
-            cells: (Cell::invalid(), Cell::invalid())
+            cells: (cell0, cell1),
         });
         self.vertices[vertex0].edges.push(edge);
         self.vertices[vertex1].edges.push(edge);
+        self.cells[cell0].edges.push(edge);
+        self.cells[cell1].edges.push(edge);
         edge
     }
 
