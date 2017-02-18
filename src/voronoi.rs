@@ -5,6 +5,11 @@ use event::{SiteEvent, CircleEvent};
 use beach_line::{BeachLine, Arc};
 use diagram::{Diagram, Vertex, Cell};
 
+struct Center {
+    sum: Vector3<f64>,
+    count: usize,
+}
+
 #[derive(Default)]
 struct Builder {
     circle_events: BinaryHeap<CircleEvent>,
@@ -12,6 +17,7 @@ struct Builder {
     beach: BeachLine,
     diagram: Diagram,
     starts: IdVec<Vertex>,
+    centers: Vec<Center>,
     is_final: bool,
 }
 
@@ -58,12 +64,17 @@ impl Builder {
         for cell in self.diagram.cells() {
             self.site_events.push(SiteEvent::from(self.diagram.center(cell)));
         }
+        self.centers.clear();
         self.diagram.clear();
     }
 
     fn site_event(&mut self) {
         let theta = self.site_events[self.diagram.cells().len()].theta.value;
         let cell = self.diagram.add_cell();
+        self.centers.push(Center {
+            sum: Vector3::new(0.0, 0.0, 0.0),
+            count: 0,
+        });
         let arc = self.beach.insert(cell, &self.site_events);
         let (prev, next) = self.beach.neighbors(arc);
         if prev != arc {
@@ -82,9 +93,7 @@ impl Builder {
             self.beach.detach_circle(arc);
             self.beach.detach_circle(prev);
             self.beach.detach_circle(next);
-            let vertex = self.diagram.add_vertex(center, [self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
-            self.create_edge(prev, vertex);
-            self.create_edge(arc, vertex);
+            let vertex = self.create_vertex(center, prev, arc, next);
             self.beach.remove(arc);
             if self.beach.prev(prev) == next {
                 self.create_edge(next, vertex);
@@ -92,8 +101,10 @@ impl Builder {
                 self.beach.remove(next);
             } else {
                 if self.attach_circle(prev, theta) {
-                    let start = self.starts.push(vertex);
-                    self.beach.set_start(prev, start);
+                    if self.is_final {
+                        let start = self.starts.push(vertex);
+                        self.beach.set_start(prev, start);
+                    }
                 }
                 self.attach_circle(next, theta);
             }
@@ -160,6 +171,26 @@ impl Builder {
             }
         }
         cells
+    }
+
+    fn create_vertex(&mut self, center: Vector3<f64>, prev: Arc, arc: Arc, next: Arc) -> Vertex {
+        if self.is_final {
+            let vertex = self.diagram.add_vertex(center, [self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next)]);
+            self.create_edge(prev, vertex);
+            self.create_edge(arc, vertex);
+            vertex
+        } else {
+            self.add_to_center(center, prev);
+            self.add_to_center(center, arc);
+            self.add_to_center(center, next);
+            Vertex::invalid()
+        }
+    }
+
+    fn add_to_center(&mut self, position: Vector3<f64>, arc: Arc) {
+        let center = &mut self.centers[self.beach.cell(arc).index()];
+        center.count += 1;
+        center.sum += position;
     }
 }
 
