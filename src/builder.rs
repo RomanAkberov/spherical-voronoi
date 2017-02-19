@@ -42,7 +42,7 @@ impl<G: Generator> Builder<G> {
         self.site_index += 1;
         let arc = self.beach.insert(cell, &self.site_events);
         let (prev, next) = self.beach.neighbors(arc);
-        self.generator.temporary(arc, prev);
+        self.generator.temporary(self.beach.index(arc), self.beach.index(prev));
         if prev != next {
             self.detach_circle(prev);
             self.attach_circle(prev, theta);
@@ -64,16 +64,16 @@ impl<G: Generator> Builder<G> {
                                                self.beach.cell(prev),
                                                self.beach.cell(arc),
                                                self.beach.cell(next));
-            self.generator.edge(prev, vertex);
-            self.generator.edge(arc, vertex);
+            self.generator.edge(self.beach.index(prev), vertex);
+            self.generator.edge(self.beach.index(arc), vertex);
             self.beach.remove(arc);
             if self.beach.prev(prev) == next {
-                self.generator.edge(next, vertex);
+                self.generator.edge(self.beach.index(next), vertex);
                 self.beach.remove(prev);
                 self.beach.remove(next);
             } else {
                 if self.attach_circle(prev, theta) {
-                    self.generator.start(prev, vertex);
+                    self.generator.start(self.beach.index(prev), vertex);
                 }
                 self.attach_circle(next, theta);
             }

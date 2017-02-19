@@ -8,6 +8,7 @@ const HEIGHT: usize = 5;
 
 #[derive(Debug)]
 pub struct ArcData {
+    index: usize,
     cell: Cell,
     circle_theta: f64,
     circle_center: Position,
@@ -23,7 +24,9 @@ pub type Arc = Id<ArcData>;
 
 #[derive(Debug)]
 pub struct BeachLine {
-    pub arcs: IdVec<ArcData>,
+    next_index: usize,
+    arcs: IdVec<ArcData>,
+    free: Vec<Arc>,
     head: Arc,
     len: usize,
     levels: [usize; HEIGHT],
@@ -104,6 +107,8 @@ impl BeachLine {
             }
         }
         self.remove_links(arc);
+        //println!("remove {:?}", arc);
+        self.free.push(arc);
     }
 
     pub fn cell(&self, arc: Arc) -> Cell {
@@ -131,13 +136,17 @@ impl BeachLine {
         self.arcs[arc].prev
     }
 
-
     pub fn next(&self, arc: Arc) -> Arc {
         self.arcs[arc].next
     }
 
+    pub fn index(&self, arc: Arc) -> usize {
+        self.arcs[arc].index
+    }
+
     fn create_arc(&mut self, cell: Cell) -> Arc {
-        self.arcs.push(ArcData {
+        let data = ArcData {
+            index: self.next_index,
             cell: cell,
             circle_center: Position::new(0.0, 0.0, 0.0),
             circle_theta: ::std::f64::MIN,
@@ -147,7 +156,16 @@ impl BeachLine {
             next: Arc::invalid(),
             prev_skips: [Arc::invalid(); HEIGHT],
             next_skips: [Arc::invalid(); HEIGHT],
-        })
+        };
+        self.next_index += 1;
+        if let Some(arc) = self.free.pop() {
+            //println!("reuse {:?}", arc);
+            self.arcs[arc] = data;
+            arc
+        } else {
+            //println!("new {:?}", Arc::from(self.arcs.len()));
+            self.arcs.push(data)
+        }
     }
 
     fn skips(&self, arc: Arc, level: usize) -> (Arc, Arc) {
@@ -263,7 +281,9 @@ impl BeachLine {
 impl Default for BeachLine {
     fn default() -> Self {
         BeachLine {
+            next_index: 0,
             arcs: Default::default(),
+            free: Default::default(),
             head: Arc::invalid(),
             len: 0,
             levels: [0; HEIGHT],

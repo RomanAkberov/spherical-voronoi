@@ -3,7 +3,6 @@ use std::vec::IntoIter;
 use cgmath::Zero;
 use ideal::{Id, IdVec};
 use diagram::{Diagram, Vertex, Cell};
-use beach_line::Arc;
 use ::Position;
 
 pub trait Generator: Default {
@@ -11,9 +10,9 @@ pub trait Generator: Default {
 
     fn result(self) -> Self::Result;
     fn vertex(&mut self, position: Position, cell0: Cell, cell1: Cell, cell2: Cell) -> Vertex;
-    fn start(&mut self, arc: Arc, vertex: Vertex);
-    fn temporary(&mut self, arc: Arc, prev: Arc);
-    fn edge(&mut self, arc: Arc, end: Vertex);
+    fn start(&mut self, index: usize, vertex: Vertex);
+    fn temporary(&mut self, index: usize, prev: usize);
+    fn edge(&mut self, index: usize, end: Vertex);
     fn cell(&mut self) -> Cell;
 }
 
@@ -64,11 +63,9 @@ impl Generator for CentroidGenerator {
         Vertex::invalid()
     }
 
-    fn start(&mut self, _: Arc, _: Vertex) {}
-
-    fn temporary(&mut self, _: Arc, _: Arc) {}
-
-    fn edge(&mut self, _: Arc, _: Vertex) {}
+    fn start(&mut self, _: usize, _: Vertex) {}
+    fn temporary(&mut self, _: usize, _: usize) {}
+    fn edge(&mut self, _: usize, _: Vertex) {}
 
     fn cell(&mut self) -> Cell {
         self.centroids.push(Centroid::new());
@@ -99,6 +96,16 @@ impl DiagramGenerator {
         }
         cells
     }
+
+    fn set_start(&mut self, index: usize, start: Id<Vertex>) {
+        println!("set {:?}", index);
+        if index < self.arc_starts.len() {
+            self.arc_starts[index] = start;
+        } else {
+            assert_eq!(self.arc_starts.len(), index);
+            self.arc_starts.push(start);
+        }
+    }
 }
 
 impl Generator for DiagramGenerator {
@@ -112,34 +119,36 @@ impl Generator for DiagramGenerator {
         self.diagram.add_vertex(position, [cell0, cell1, cell2])
     }
 
-    fn start(&mut self, arc: Arc, vertex: Vertex) {
-        let start = self.start_vertices.push(vertex);
-        self.arc_starts[arc.index()] = start;
+    fn start(&mut self, index: usize, vertex: Vertex) {
+        println!("start {:?}", index);
+        self.arc_starts[index] = self.start_vertices.push(vertex);
     }
 
-    fn temporary(&mut self, arc: Arc, prev: Arc) {
-        if arc != prev {
+    fn temporary(&mut self, index: usize, prev: usize) {
+        if index != prev {
             let start = self.start_vertices.push(Vertex::invalid());
-            // if `arc` and `prev` are the only arcs on the beach, then `prev` is not new.
-            if arc > prev {
-                self.arc_starts[prev.index()] = start;
+            if index < prev {
+                self.set_start(index, start);
+                self.set_start(prev, start);
             } else {
-                self.arc_starts.push(start);
+                self.set_start(prev, start);
+                self.set_start(index, start);
             }
-            self.arc_starts.push(start);
         } else {
-            self.arc_starts.push(Id::invalid());
+            //self.set_start(index, Id::invalid());
         }
     }
 
-    fn edge(&mut self, arc: Arc, end: Vertex) {
-        let start = self.arc_starts[arc.index()];
+    fn edge(&mut self, index: usize, end: Vertex) {
+        let start = self.arc_starts[index];
         if start.is_valid() {
             let vertex = self.start_vertices[start];
             if vertex.is_valid() {
                 let (cell0, cell1) = self.common_cells(vertex, end);
+                println!("edge {} -> {:?} {:?}", index, vertex, end);
                 self.diagram.add_edge(vertex, end, cell0, cell1);
             } else {
+                println!("edge {} -> {:?}", index, end);
                 self.start_vertices[start] = end;
             }
         }
