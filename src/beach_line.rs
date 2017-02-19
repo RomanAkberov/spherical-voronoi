@@ -1,6 +1,6 @@
 use std::f64::consts::{PI, FRAC_1_PI};
 use ideal::{Id, IdVec};
-use event::SiteEvent;
+use event::{SiteEvent, CircleEvent};
 use diagram::Cell;
 use ::Position;
 
@@ -9,6 +9,7 @@ const HEIGHT: usize = 5;
 #[derive(Debug)]
 pub struct ArcData {
     cell: Cell,
+    circle: Option<CircleEvent>,
     center: Option<Position>,
     scan: f64,
     end: f64,
@@ -109,15 +110,21 @@ impl BeachLine {
         self.arcs[arc].cell
     }
 
-    pub fn center(&self, arc: Arc) -> Option<Position> {
+    pub fn circle(&self, arc: Arc) -> Option<CircleEvent> {
+        self.arcs[arc].circle
+    }
+
+    pub fn circle_center(&self, arc: Arc) -> Option<Position> {
         self.arcs[arc].center
     }
 
-    pub fn attach_circle(&mut self, arc: Arc, center: Position) {
+    pub fn attach_circle(&mut self, arc: Arc, circle: CircleEvent, center: Position) {
+        self.arcs[arc].circle = Some(circle);
         self.arcs[arc].center = Some(center);
     }
 
     pub fn detach_circle(&mut self, arc: Arc) {
+        self.arcs[arc].circle = None;
         self.arcs[arc].center = None;
     }
 
@@ -134,6 +141,7 @@ impl BeachLine {
     fn create_arc(&mut self, cell: Cell) -> Arc {
         self.arcs.push(ArcData {
             cell: cell,
+            circle: None,
             center: None,
             scan: -1.0,
             end: 0.0,

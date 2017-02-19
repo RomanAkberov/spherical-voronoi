@@ -3,7 +3,7 @@ use cgmath::InnerSpace;
 use beach_line::Arc;
 use ::Position;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct CircleEvent {
     pub theta: f64,
     pub arc: Arc,
@@ -11,7 +11,7 @@ pub struct CircleEvent {
 
 impl PartialOrd for CircleEvent {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.theta.partial_cmp(&self.theta)
+        self.theta.partial_cmp(&other.theta)
     }
 }
 

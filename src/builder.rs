@@ -1,4 +1,4 @@
-use std::collections::BinaryHeap;
+use std::collections::BTreeSet;
 use cgmath::InnerSpace;
 use event::{SiteEvent, CircleEvent};
 use beach_line::{BeachLine, Arc};
@@ -9,7 +9,7 @@ use ::Position;
 struct Builder<G: Generator> {
     site_index: usize,
     site_events: Vec<SiteEvent>,
-    circle_events: BinaryHeap<CircleEvent>,
+    circle_events: BTreeSet<CircleEvent>,
     beach: BeachLine,
     generator: G,
 }
@@ -23,7 +23,7 @@ impl<G: Generator> Builder<G> {
                 (true, true) => break,
                 (true, false) => self.circle_event(),
                 (false, true) => self.site_event(),
-                (false, false) => if self.site_events[self.site_index].theta.value < self.circle_events.peek().unwrap().theta {
+                (false, false) => if self.site_events[self.site_index].theta.value < self.circle_events.iter().next().unwrap().theta {
                     self.site_event()
                 } else {
                     self.circle_event()
@@ -41,18 +41,23 @@ impl<G: Generator> Builder<G> {
         let (prev, next) = self.beach.neighbors(arc);
         self.generator.temporary(arc, prev);
         if prev != next {
+            self.detach_circle(prev);
             self.attach_circle(prev, theta);
             self.attach_circle(next, theta);
         }
     }
 
     fn circle_event(&mut self) {
-        let CircleEvent { arc, theta } = self.circle_events.pop().unwrap();
-        if let Some(center) = self.beach.center(arc) {
+        let (arc, theta) = {
+            let circle = self.circle_events.iter().next().unwrap();
+            (circle.arc, circle.theta)
+        };
+        self.circle_events.remove(&CircleEvent { arc: arc, theta: theta });
+        if let Some(center) = self.beach.circle_center(arc) {
             let (prev, next) = self.beach.neighbors(arc);
             self.beach.detach_circle(arc);
-            self.beach.detach_circle(prev);
-            self.beach.detach_circle(next);
+            self.detach_circle(prev);
+            self.detach_circle(next);
             let vertex = self.generator.vertex(center, self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next));
             self.generator.edge(prev, vertex);
             self.generator.edge(arc, vertex);
@@ -78,17 +83,25 @@ impl<G: Generator> Builder<G> {
         let center = from_prev.cross(from_next).normalize();
         let theta = center.z.acos() + center.dot(position).acos();
         if theta >= min {
-            self.beach.attach_circle(arc, center);
-            self.circle_events.push(CircleEvent {
+            let circle = CircleEvent {
                 theta: theta,
                 arc: arc,
-            });
+            };
+            self.beach.attach_circle(arc, circle, center);
+            self.circle_events.insert(circle);
             true
         } else {
             false
         }
     }
     
+    fn detach_circle(&mut self, arc: Arc) {
+        if let Some(circle) = self.beach.circle(arc) {
+            self.circle_events.remove(&circle);
+            self.beach.detach_circle(arc);
+        }
+    }
+
     fn arc_position(&self, arc: Arc) -> Position {
         self.site_events[self.beach.cell(arc).index()].position
     }
