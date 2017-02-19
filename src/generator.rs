@@ -145,10 +145,10 @@ impl Generator for DiagramGenerator {
             let vertex = self.start_vertices[start];
             if vertex.is_valid() {
                 let (cell0, cell1) = self.common_cells(vertex, end);
-                println!("{:?} {:?}", index, vertex, end);
+                println!("{:?} {:?}", vertex, end);
                 self.diagram.add_edge(vertex, end, cell0, cell1);
             } else {
-                println!("{:?}", index, end);
+                println!("{:?}", end);
                 self.start_vertices[start] = end;
             }
         }
