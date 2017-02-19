@@ -51,6 +51,7 @@ impl<G: Generator> Builder<G> {
     }
 
     fn circle_event(&mut self) {
+        println!("circle");
         let circle = *self.circle_events.iter().next().unwrap();
         self.circle_events.remove(&circle);
         let arc = circle.arc;

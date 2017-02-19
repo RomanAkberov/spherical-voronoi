@@ -135,7 +135,7 @@ impl Generator for DiagramGenerator {
                 self.set_start(index, start);
             }
         } else {
-            //self.set_start(index, Id::invalid());
+            self.set_start(index, Id::invalid());
         }
     }
 
