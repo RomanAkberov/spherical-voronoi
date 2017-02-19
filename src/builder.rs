@@ -51,10 +51,10 @@ impl<G: Generator> Builder<G> {
     }
 
     fn circle_event(&mut self) {
-        println!("circle");
         let circle = *self.circle_events.iter().next().unwrap();
         self.circle_events.remove(&circle);
         let arc = circle.arc;
+        println!("circle {:?}", arc);
         let theta = self.beach.circle_theta(arc);
         if theta >= 0.0 {
             let (prev, next) = self.beach.neighbors(arc);
