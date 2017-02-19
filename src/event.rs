@@ -16,8 +16,15 @@ impl PartialOrd for CircleEvent {
 }
 
 impl Ord for CircleEvent {
+    #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        if self.theta < other.theta {
+            Ordering::Less
+        } else if self.theta > other.theta {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
     }
 }
 
@@ -75,7 +82,13 @@ impl PartialOrd for SiteEvent {
 
 impl Ord for SiteEvent {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        if self.theta.value < other.theta.value {
+            Ordering::Less
+        } else if self.theta.value > other.theta.value {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
     }
 }
 

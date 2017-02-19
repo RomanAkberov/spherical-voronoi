@@ -1,6 +1,6 @@
 use std::f64::consts::{PI, FRAC_1_PI};
 use ideal::{Id, IdVec};
-use event::{SiteEvent, CircleEvent};
+use event::{SiteEvent};
 use diagram::Cell;
 use ::Position;
 
@@ -9,10 +9,10 @@ const HEIGHT: usize = 5;
 #[derive(Debug)]
 pub struct ArcData {
     cell: Cell,
-    circle: Option<CircleEvent>,
-    center: Option<Position>,
-    scan: f64,
-    end: f64,
+    circle_theta: f64,
+    circle_center: Position,
+    last_theta: f64,
+    last_intersection: f64,
     prev: Arc,
     next: Arc,
     prev_skips: [Arc; HEIGHT],
@@ -31,7 +31,7 @@ pub struct BeachLine {
 
 impl BeachLine {
     pub fn insert(&mut self, cell: Cell, sites: &[SiteEvent]) -> Arc {        
-        let new = self.create_arc(cell);
+        let arc = self.create_arc(cell);
         if self.len > 1 {
             let mut current = self.head;
             let mut level = HEIGHT - 1;
@@ -65,15 +65,15 @@ impl BeachLine {
             let twin = self.create_arc(current_cell);
             let prev = self.prev(current);  
             self.add_links(twin, prev, current, &mut skips);
-            self.add_links(new, twin, current, &mut skips);
+            self.add_links(arc, twin, current, &mut skips);
         } else {
             if self.len == 0 {
-                self.head = new;
+                self.head = arc;
             }
             let head = self.head;
-            self.add_links(new, head, head, &mut [head; HEIGHT]);
+            self.add_links(arc, head, head, &mut [head; HEIGHT]);
         }
-        new
+        arc
     }
     
     pub fn neighbors(&self, arc: Arc) -> (Arc, Arc) {
@@ -110,24 +110,22 @@ impl BeachLine {
         self.arcs[arc].cell
     }
 
-    pub fn circle(&self, arc: Arc) -> Option<CircleEvent> {
-        self.arcs[arc].circle
+    pub fn circle_theta(&self, arc: Arc) -> f64 {
+        self.arcs[arc].circle_theta
     }
 
-    pub fn circle_center(&self, arc: Arc) -> Option<Position> {
-        self.arcs[arc].center
+    pub fn circle_center(&self, arc: Arc) -> Position {
+        self.arcs[arc].circle_center
     }
 
-    pub fn attach_circle(&mut self, arc: Arc, circle: CircleEvent, center: Position) {
-        self.arcs[arc].circle = Some(circle);
-        self.arcs[arc].center = Some(center);
+    pub fn attach_circle(&mut self, arc: Arc, theta: f64, center: Position) {
+        self.arcs[arc].circle_center = center;
+        self.arcs[arc].circle_theta = theta;
     }
 
     pub fn detach_circle(&mut self, arc: Arc) {
-        self.arcs[arc].circle = None;
-        self.arcs[arc].center = None;
+        self.arcs[arc].circle_theta = ::std::f64::MIN;
     }
-
 
     pub fn prev(&self, arc: Arc) -> Arc {
         self.arcs[arc].prev
@@ -141,10 +139,10 @@ impl BeachLine {
     fn create_arc(&mut self, cell: Cell) -> Arc {
         self.arcs.push(ArcData {
             cell: cell,
-            circle: None,
-            center: None,
-            scan: -1.0,
-            end: 0.0,
+            circle_center: Position::new(0.0, 0.0, 0.0),
+            circle_theta: ::std::f64::MIN,
+            last_theta: -1.0,
+            last_intersection: 0.0,
             prev: Arc::invalid(),
             next: Arc::invalid(),
             prev_skips: [Arc::invalid(); HEIGHT],
@@ -173,11 +171,11 @@ impl BeachLine {
         let arc_point = &sites[self.cell(arc).index()];
         let next_point = &sites[self.cell(self.next(arc)).index()];
         let data = &mut self.arcs[arc];
-        if data.scan < site.theta.value {
-            data.scan = site.theta.value;
-            data.end = BeachLine::intersect(arc_point, next_point, site);
+        if data.last_theta < site.theta.value {
+            data.last_theta = site.theta.value;
+            data.last_intersection = BeachLine::intersect(arc_point, next_point, site);
         }
-        data.end
+        data.last_intersection
     }
 
     fn intersect(site0: &SiteEvent, site1: &SiteEvent, site2: &SiteEvent) -> f64 {

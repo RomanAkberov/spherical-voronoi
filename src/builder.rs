@@ -48,17 +48,19 @@ impl<G: Generator> Builder<G> {
     }
 
     fn circle_event(&mut self) {
-        let (arc, theta) = {
-            let circle = self.circle_events.iter().next().unwrap();
-            (circle.arc, circle.theta)
-        };
-        self.circle_events.remove(&CircleEvent { arc: arc, theta: theta });
-        if let Some(center) = self.beach.circle_center(arc) {
+        let circle = *self.circle_events.iter().next().unwrap();
+        self.circle_events.remove(&circle);
+        let arc = circle.arc;
+        let theta = self.beach.circle_theta(arc);
+        if theta >= 0.0 {
             let (prev, next) = self.beach.neighbors(arc);
             self.beach.detach_circle(arc);
             self.detach_circle(prev);
             self.detach_circle(next);
-            let vertex = self.generator.vertex(center, self.beach.cell(prev), self.beach.cell(arc), self.beach.cell(next));
+            let vertex = self.generator.vertex(self.beach.circle_center(arc),
+                self.beach.cell(prev),
+                self.beach.cell(arc),
+                self.beach.cell(next));
             self.generator.edge(prev, vertex);
             self.generator.edge(arc, vertex);
             self.beach.remove(arc);
@@ -87,7 +89,7 @@ impl<G: Generator> Builder<G> {
                 theta: theta,
                 arc: arc,
             };
-            self.beach.attach_circle(arc, circle, center);
+            self.beach.attach_circle(arc, theta, center);
             self.circle_events.insert(circle);
             true
         } else {
@@ -96,8 +98,9 @@ impl<G: Generator> Builder<G> {
     }
     
     fn detach_circle(&mut self, arc: Arc) {
-        if let Some(circle) = self.beach.circle(arc) {
-            self.circle_events.remove(&circle);
+        let theta = self.beach.circle_theta(arc);
+        if theta >= 0.0 {
+            self.circle_events.remove(&CircleEvent { arc: arc, theta: theta });
             self.beach.detach_circle(arc);
         }
     }
