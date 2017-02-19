@@ -107,7 +107,6 @@ impl BeachLine {
             }
         }
         self.remove_links(arc);
-        //println!("remove {:?}", arc);
         self.free.push(arc);
     }
 
@@ -159,11 +158,9 @@ impl BeachLine {
         };
         self.next_index += 1;
         if let Some(arc) = self.free.pop() {
-            //println!("reuse {:?}", arc);
             self.arcs[arc] = data;
             arc
         } else {
-            //println!("new {:?}", Arc::from(self.arcs.len()));
             self.arcs.push(data)
         }
     }

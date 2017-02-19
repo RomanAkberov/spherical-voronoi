@@ -45,6 +45,7 @@ impl<G: Generator> Builder<G> {
         self.generator.temporary(self.beach.index(arc), self.beach.index(prev));
         if prev != next {
             self.detach_circle(prev);
+            self.detach_circle(next);
             self.attach_circle(prev, theta);
             self.attach_circle(next, theta);
         }
@@ -55,7 +56,6 @@ impl<G: Generator> Builder<G> {
         self.circle_events.remove(&circle);
         let arc = circle.arc;
         let theta = self.beach.circle_theta(arc);
-        println!("circle [{:?}] {}", self.beach.index(arc), theta);
         if theta >= 0.0 {
             let (prev, next) = self.beach.neighbors(arc);
             self.beach.detach_circle(arc);
