@@ -8,8 +8,7 @@ mod builder;
 mod diagram;
 
 pub use diagram::*;
-pub type F = f64;
-pub type Position = ::cgmath::Vector3<F>;
+pub type Position = ::cgmath::Vector3<f64>;
 
 pub fn build<I: IntoIterator<Item = Position>>(positions: I, relaxations: usize) -> Diagram {
     if relaxations == 0 {
