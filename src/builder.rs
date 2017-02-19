@@ -19,18 +19,17 @@ impl<G: Generator> Builder<G> {
         self.site_events.extend(positions.into_iter().map(SiteEvent::from));
         self.site_events.sort();
         loop {
-            match (self.site_index == self.site_events.len(), self.circle_events.is_empty()) {
-                (true, true) => break,
-                (true, false) => self.circle_event(),
-                (false, true) => self.site_event(),
-                (false, false) => {
-                    if self.site_events[self.site_index].theta.value <
-                       self.circle_events.iter().next().unwrap().theta {
-                        self.site_event()
-                    } else {
-                        self.circle_event()
-                    }
+            let has_sites = self.site_index < self.site_events.len();
+            if let Some(circle) = self.circle_events.iter().next().cloned() {
+                if has_sites && self.site_events[self.site_index].theta.value < circle.theta {
+                    self.site_event();
+                } else {
+                    self.circle_event(&circle);
                 }
+            } else if has_sites {
+                self.site_event()
+            } else {
+                break;
             }
         }
         self.generator.result()
@@ -51,9 +50,8 @@ impl<G: Generator> Builder<G> {
         }
     }
 
-    fn circle_event(&mut self) {
-        let circle = *self.circle_events.iter().next().unwrap();
-        self.circle_events.remove(&circle);
+    fn circle_event(&mut self, circle: &CircleEvent) {
+        self.circle_events.remove(circle);
         let arc = circle.arc;
         let theta = self.beach.circle_theta(arc);
         if theta >= 0.0 {
