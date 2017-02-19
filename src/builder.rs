@@ -54,8 +54,8 @@ impl<G: Generator> Builder<G> {
         let circle = *self.circle_events.iter().next().unwrap();
         self.circle_events.remove(&circle);
         let arc = circle.arc;
-        println!("circle {:?}", arc);
         let theta = self.beach.circle_theta(arc);
+        println!("circle [{:?}] {}", self.beach.index(arc), theta);
         if theta >= 0.0 {
             let (prev, next) = self.beach.neighbors(arc);
             self.beach.detach_circle(arc);
