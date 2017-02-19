@@ -1,6 +1,6 @@
 use std::f64::consts::{PI, FRAC_1_PI};
 use ideal::{Id, IdVec};
-use event::{SiteEvent};
+use event::SiteEvent;
 use diagram::Cell;
 use ::Position;
 
@@ -30,7 +30,7 @@ pub struct BeachLine {
 }
 
 impl BeachLine {
-    pub fn insert(&mut self, cell: Cell, sites: &[SiteEvent]) -> Arc {        
+    pub fn insert(&mut self, cell: Cell, sites: &[SiteEvent]) -> Arc {
         let arc = self.create_arc(cell);
         if self.len > 1 {
             let mut current = self.head;
@@ -63,7 +63,7 @@ impl BeachLine {
             current = next;
             let current_cell = self.cell(current);
             let twin = self.create_arc(current_cell);
-            let prev = self.prev(current);  
+            let prev = self.prev(current);
             self.add_links(twin, prev, current, &mut skips);
             self.add_links(arc, twin, current, &mut skips);
         } else {
@@ -75,7 +75,7 @@ impl BeachLine {
         }
         arc
     }
-    
+
     pub fn neighbors(&self, arc: Arc) -> (Arc, Arc) {
         let data = &self.arcs[arc];
         (data.prev, data.next)

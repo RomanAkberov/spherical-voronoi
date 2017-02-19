@@ -6,23 +6,6 @@ use diagram::{Diagram, Vertex, Cell};
 use beach_line::Arc;
 use ::Position;
 
-pub struct Centroid {
-    sum: Position,
-    count: f64,
-}
-
-impl Centroid {
-    fn new() -> Self {
-        Centroid { sum: Position::zero(), count: 1.0 }
-    }
-
-    pub fn position(self) -> Position {
-        self.sum / self.count
-    }
-}
-
-pub type Centroids = Map<IntoIter<Centroid>, fn(Centroid) -> Position>;
-
 pub trait Generator: Default {
     type Result;
 
@@ -34,6 +17,26 @@ pub trait Generator: Default {
     fn cell(&mut self) -> Cell;
 }
 
+pub struct Centroid {
+    sum: Position,
+    count: f64,
+}
+
+impl Centroid {
+    fn new() -> Self {
+        Centroid {
+            sum: Position::zero(),
+            count: 1.0,
+        }
+    }
+
+    pub fn position(self) -> Position {
+        self.sum / self.count
+    }
+}
+
+pub type Centroids = Map<IntoIter<Centroid>, fn(Centroid) -> Position>;
+
 #[derive(Default)]
 pub struct CentroidGenerator {
     centroids: Vec<Centroid>,
@@ -43,7 +46,7 @@ impl CentroidGenerator {
     fn add_to_centroid(&mut self, cell: Cell, position: Position) {
         let centroid = &mut self.centroids[cell.index()];
         centroid.count += 1.0;
-        centroid.sum += position; 
+        centroid.sum += position;
     }
 }
 
@@ -87,7 +90,7 @@ impl DiagramGenerator {
             for &other_cell in self.diagram.vertex_cells(vertex1) {
                 if cell == other_cell {
                     if cells.0.is_invalid() {
-                        cells.0 = cell; 
+                        cells.0 = cell;
                     } else {
                         cells.1 = cell;
                     }

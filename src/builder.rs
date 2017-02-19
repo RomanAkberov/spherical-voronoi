@@ -15,7 +15,7 @@ struct Builder<G: Generator> {
 }
 
 impl<G: Generator> Builder<G> {
-    fn build<I: IntoIterator<Item=Position>>(mut self, positions: I) -> G::Result {
+    fn build<I: IntoIterator<Item = Position>>(mut self, positions: I) -> G::Result {
         self.site_events.extend(positions.into_iter().map(SiteEvent::from));
         self.site_events.sort();
         loop {
@@ -23,10 +23,13 @@ impl<G: Generator> Builder<G> {
                 (true, true) => break,
                 (true, false) => self.circle_event(),
                 (false, true) => self.site_event(),
-                (false, false) => if self.site_events[self.site_index].theta.value < self.circle_events.iter().next().unwrap().theta {
-                    self.site_event()
-                } else {
-                    self.circle_event()
+                (false, false) => {
+                    if self.site_events[self.site_index].theta.value <
+                       self.circle_events.iter().next().unwrap().theta {
+                        self.site_event()
+                    } else {
+                        self.circle_event()
+                    }
                 }
             }
         }
@@ -58,9 +61,9 @@ impl<G: Generator> Builder<G> {
             self.detach_circle(prev);
             self.detach_circle(next);
             let vertex = self.generator.vertex(self.beach.circle_center(arc),
-                self.beach.cell(prev),
-                self.beach.cell(arc),
-                self.beach.cell(next));
+                                               self.beach.cell(prev),
+                                               self.beach.cell(arc),
+                                               self.beach.cell(next));
             self.generator.edge(prev, vertex);
             self.generator.edge(arc, vertex);
             self.beach.remove(arc);
@@ -76,7 +79,7 @@ impl<G: Generator> Builder<G> {
             }
         }
     }
-    
+
     fn attach_circle(&mut self, arc: Arc, min: f64) -> bool {
         let (prev, next) = self.beach.neighbors(arc);
         let position = self.arc_position(arc);
@@ -85,22 +88,24 @@ impl<G: Generator> Builder<G> {
         let center = from_prev.cross(from_next).normalize();
         let theta = center.z.acos() + center.dot(position).acos();
         if theta >= min {
-            let circle = CircleEvent {
+            self.beach.attach_circle(arc, theta, center);
+            self.circle_events.insert(CircleEvent {
                 theta: theta,
                 arc: arc,
-            };
-            self.beach.attach_circle(arc, theta, center);
-            self.circle_events.insert(circle);
+            });
             true
         } else {
             false
         }
     }
-    
+
     fn detach_circle(&mut self, arc: Arc) {
         let theta = self.beach.circle_theta(arc);
         if theta >= 0.0 {
-            self.circle_events.remove(&CircleEvent { arc: arc, theta: theta });
+            self.circle_events.remove(&CircleEvent {
+                arc: arc,
+                theta: theta,
+            });
             self.beach.detach_circle(arc);
         }
     }
@@ -110,6 +115,6 @@ impl<G: Generator> Builder<G> {
     }
 }
 
-pub fn build<G: Generator, I: IntoIterator<Item=Position>>(positions: I) -> G::Result {
+pub fn build<G: Generator, I: IntoIterator<Item = Position>>(positions: I) -> G::Result {
     Builder::<G>::default().build(positions)
 }

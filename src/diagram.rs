@@ -80,7 +80,7 @@ impl Diagram {
     pub fn edge_vertices(&self, edge: Edge) -> (Vertex, Vertex) {
         self.edges[edge].vertices
     }
- 
+
     pub fn edge_cells(&self, edge: Edge) -> (Cell, Cell) {
         self.edges[edge].cells
     }
