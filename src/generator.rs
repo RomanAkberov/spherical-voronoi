@@ -98,7 +98,7 @@ impl DiagramGenerator {
     }
 
     fn set_start(&mut self, index: usize, start: Id<Vertex>) {
-        println!("set {:?}", index);
+        //println!("set {:?}", index);
         if index < self.arc_starts.len() {
             self.arc_starts[index] = start;
         } else {
@@ -120,7 +120,7 @@ impl Generator for DiagramGenerator {
     }
 
     fn start(&mut self, index: usize, vertex: Vertex) {
-        println!("start {:?}", index);
+        //println!("start {:?}", index);
         self.arc_starts[index] = self.start_vertices.push(vertex);
     }
 
@@ -145,10 +145,10 @@ impl Generator for DiagramGenerator {
             let vertex = self.start_vertices[start];
             if vertex.is_valid() {
                 let (cell0, cell1) = self.common_cells(vertex, end);
-                println!("edge {} -> {:?} {:?}", index, vertex, end);
+                println!("{:?} {:?}", index, vertex, end);
                 self.diagram.add_edge(vertex, end, cell0, cell1);
             } else {
-                println!("edge {} -> {:?}", index, end);
+                println!("{:?}", index, end);
                 self.start_vertices[start] = end;
             }
         }
