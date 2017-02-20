@@ -53,29 +53,27 @@ impl<G: Generator> Builder<G> {
     fn circle_event(&mut self, circle: &CircleEvent) {
         self.circle_events.remove(circle);
         let arc = circle.arc;
-        let theta = self.beach.circle_theta(arc);
-        if theta >= 0.0 {
-            let (prev, next) = self.beach.neighbors(arc);
-            self.beach.detach_circle(arc);
-            self.detach_circle(prev);
-            self.detach_circle(next);
-            let vertex = self.generator.vertex(self.beach.circle_center(arc),
-                                               self.beach.cell(prev),
-                                               self.beach.cell(arc),
-                                               self.beach.cell(next));
-            self.generator.edge(self.beach.index(prev), vertex);
-            self.generator.edge(self.beach.index(arc), vertex);
-            self.beach.remove(arc);
-            if self.beach.prev(prev) == next {
-                self.generator.edge(self.beach.index(next), vertex);
-                self.beach.remove(prev);
-                self.beach.remove(next);
-            } else {
-                if self.attach_circle(prev, theta) {
-                    self.generator.start(self.beach.index(prev), vertex);
-                }
-                self.attach_circle(next, theta);
+        let theta = circle.theta;
+        let (prev, next) = self.beach.neighbors(arc);
+        self.beach.detach_circle(arc);
+        self.detach_circle(prev);
+        self.detach_circle(next);
+        let vertex = self.generator.vertex(self.beach.circle_center(arc),
+                                            self.beach.cell(prev),
+                                            self.beach.cell(arc),
+                                            self.beach.cell(next));
+        self.generator.edge(self.beach.index(prev), vertex);
+        self.generator.edge(self.beach.index(arc), vertex);
+        self.beach.remove(arc);
+        if self.beach.prev(prev) == next {
+            self.generator.edge(self.beach.index(next), vertex);
+            self.beach.remove(prev);
+            self.beach.remove(next);
+        } else {
+            if self.attach_circle(prev, theta) {
+                self.generator.start(self.beach.index(prev), vertex);
             }
+            self.attach_circle(next, theta);
         }
     }
 
