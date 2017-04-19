@@ -1,7 +1,7 @@
 use std::f64::consts::{PI, FRAC_1_PI};
 use ideal::{Id, IdVec};
 use event::SiteEvent;
-use diagram::Cell;
+use builder::{Cell, Vertex};
 use ::Position;
 
 const HEIGHT: usize = 5;
@@ -20,26 +20,28 @@ pub struct ArcData {
     next_skips: [Arc; HEIGHT],
 }
 
-pub type Arc = Id<ArcData>;
+create_id!(Arc);
 
 #[derive(Debug)]
 pub struct BeachLine {
     next_index: usize,
-    arcs: IdVec<ArcData>,
+    arcs: IdVec<Arc, ArcData>,
     free: Vec<Arc>,
     head: Arc,
     len: usize,
     levels: [usize; HEIGHT],
+    arc_starts: Vec<usize>,
+    start_vertices: IdVec<usize, Vertex>,
 }
 
 impl BeachLine {
-    pub fn insert(&mut self, cell: Cell, sites: &[SiteEvent]) -> Arc {
+    pub fn insert(&mut self, cell: Cell, sites: &IdVec<Cell, SiteEvent>) -> Arc {
         let arc = self.create_arc(cell);
         if self.len > 1 {
             let mut current = self.head;
             let mut level = HEIGHT - 1;
             let mut skips = [Arc::invalid(); HEIGHT];
-            let site = &sites[cell.index()];
+            let site = &sites[cell];
             loop {
                 let next_skip = self.next_skip(current, level);
                 let start = self.intersect_with_next(current, site, sites);
@@ -79,6 +81,24 @@ impl BeachLine {
         arc
     }
 
+    pub fn edge(&mut self, arc: Arc, end: Vertex) -> Option<Vertex> {
+        let start = self.arc_starts[self.index(arc)];
+        if start.is_valid() {
+            let vertex = self.start_vertices[start];
+            if vertex.is_valid() {
+                return Some(vertex);
+            } else {
+                self.start_vertices[start] = end;
+            }
+        }
+        None
+    }
+
+    pub fn start(&mut self, arc: Arc, start: Vertex) {
+        let index = self.index(arc);
+        self.arc_starts[index] = self.start_vertices.push(start);
+    }
+
     pub fn neighbors(&self, arc: Arc) -> (Arc, Arc) {
         let data = &self.arcs[arc];
         (data.prev, data.next)
@@ -110,6 +130,23 @@ impl BeachLine {
         self.free.push(arc);
     }
 
+    pub fn temporary(&mut self, arc: Arc, prev: Arc) {
+        let index = self.index(arc);
+        let prev_index = self.index(prev);
+        if index != prev_index {
+            let start = self.start_vertices.push(Vertex::invalid());
+            if index < prev_index {
+                self.set_start(index, start);
+                self.set_start(prev_index, start);
+            } else {
+                self.set_start(prev_index, start);
+                self.set_start(index, start);
+            }
+        } else {
+            self.set_start(index, Id::invalid());
+        }
+    }
+    
     pub fn cell(&self, arc: Arc) -> Cell {
         self.arcs[arc].cell
     }
@@ -165,6 +202,15 @@ impl BeachLine {
         }
     }
 
+    fn set_start(&mut self, index: usize, start: usize) {
+        if index < self.arc_starts.len() {
+            self.arc_starts[index] = start;
+        } else {
+            assert_eq!(self.arc_starts.len(), index);
+            self.arc_starts.push(start);
+        }
+    }
+
     fn skips(&self, arc: Arc, level: usize) -> (Arc, Arc) {
         let data = &self.arcs[arc];
         (data.prev_skips[level], data.next_skips[level])
@@ -182,9 +228,9 @@ impl BeachLine {
         self.arcs[arc].next_skips[level] = next;
     }
 
-    fn intersect_with_next(&mut self, arc: Arc, site: &SiteEvent, sites: &[SiteEvent]) -> f64 {
-        let arc_point = &sites[self.cell(arc).index()];
-        let next_point = &sites[self.cell(self.next(arc)).index()];
+    fn intersect_with_next(&mut self, arc: Arc, site: &SiteEvent, sites: &IdVec<Cell, SiteEvent>) -> f64 {
+        let arc_point = &sites[self.cell(arc)];
+        let next_point = &sites[self.cell(self.next(arc))];
         let data = &mut self.arcs[arc];
         if data.last_theta < site.theta.value {
             data.last_theta = site.theta.value;
@@ -284,6 +330,8 @@ impl Default for BeachLine {
             head: Arc::invalid(),
             len: 0,
             levels: [0; HEIGHT],
+            arc_starts: Default::default(),
+            start_vertices: Default::default(),
         }
     }
 }
