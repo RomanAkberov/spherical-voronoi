@@ -1,9 +1,9 @@
 use std::cmp::Ordering;
-use cgmath::{InnerSpace};
+use cgmath::prelude::*;
 use beach_line::Arc;
-use super::Position;
+use common::Point;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct CircleEvent {
     pub theta: f64,
     pub arc: Arc,
@@ -59,17 +59,17 @@ impl From<f64> for Angle {
 pub struct SiteEvent {
     pub theta: Angle,
     pub phi: Angle,
-    pub position: Position,
+    pub point: Point,
 }
 
-impl From<Position> for SiteEvent {
-    fn from(v: Position) -> Self {
-        let position = v.normalize();
-        let (theta, phi) = (position.z.acos(), position.y.atan2(position.x));
+impl SiteEvent {
+    pub fn new(point: &Point) -> Self {
+        let point = point.normalize();
+        let (theta, phi) = (point.z.acos(), point.y.atan2(point.x));
         SiteEvent {
             theta: Angle::from(theta),
             phi: Angle::from(phi),
-            position: position,
+            point,
         }
     }
 }
