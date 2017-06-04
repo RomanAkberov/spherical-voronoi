@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::iter::FromIterator;
-use cgmath::InnerSpace;
+use cgmath::{Vector3, InnerSpace};
+use ideal::IdVec;
 use event::{SiteEvent, CircleEvent};
 use beach_line::{BeachLine, Arc};
-use ::Position;
-use ideal::{Id, IdVec};
+use super::Position;
 
 create_id!(Vertex);
 create_id!(Cell);
@@ -23,8 +23,8 @@ impl Builder {
         let mut site_events = Vec::from_iter(positions.into_iter().map(SiteEvent::from));
         site_events.sort();
         Builder {
-            next_cell: Cell::new(0),
-            next_vertex: Vertex::new(0),
+            next_cell: Cell(0),
+            next_vertex: Vertex(0),
             site_events: IdVec::from(site_events),
             circle_events: Default::default(),
             beach: Default::default(),
@@ -35,10 +35,10 @@ impl Builder {
     fn site_event(&mut self) -> Item {
         let cell = self.next_cell;
         let theta = self.site_events[self.next_cell].theta.value;
-        self.next_cell = self.next_cell.next();
+        self.next_cell.0 += 1;
         let arc = self.beach.insert(cell, &self.site_events);
         let (prev, next) = self.beach.neighbors(arc);
-        self.beach.temporary(arc, prev);
+        self.beach.add_common_start(arc, prev);
         if prev != next {
             self.detach_circle(prev);
             self.detach_circle(next);
@@ -57,11 +57,11 @@ impl Builder {
         self.detach_circle(prev);
         self.detach_circle(next);
         let vertex = self.next_vertex;
-        self.next_vertex = self.next_vertex.next();
+        self.next_vertex.0 += 1;
         let position = self.beach.circle_center(arc);
-        let cell0 = self.beach.cell(prev).index();
-        let cell1 = self.beach.cell(arc).index();
-        let cell2 = self.beach.cell(next).index();    
+        let cell0 = self.beach.cell(prev);
+        let cell1 = self.beach.cell(arc);
+        let cell2 = self.beach.cell(next);
         self.edge(prev, vertex);
         self.edge(arc, vertex);
         self.beach.remove(arc);
@@ -108,21 +108,21 @@ impl Builder {
         }
     }
 
-    fn arc_position(&self, arc: Arc) -> Position {
+    fn arc_position(&self, arc: Arc) -> Vector3<f64> {
         self.site_events[self.beach.cell(arc)].position
     }
 
     fn edge(&mut self, arc: Arc, end: Vertex) {
         if let Some(start) = self.beach.edge(arc, end) {
-            self.items.push(Item::Edge(start.index(), end.index()));
+            self.items.push(Item::Edge(start, end));
         }
     }
 }
 
 pub enum Item {
     Cell,
-    Vertex(Position, usize, usize, usize),
-    Edge(usize, usize),
+    Vertex(Position, Cell, Cell, Cell),
+    Edge(Vertex, Vertex),
 }
 
 impl Iterator for Builder {
@@ -132,7 +132,7 @@ impl Iterator for Builder {
         if let Some(item) = self.items.pop() {
             return Some(item);
         }
-        let has_sites = self.next_cell.index() < self.site_events.len();
+        let has_sites = self.next_cell.0 < self.site_events.len();
         if let Some(circle) = self.circle_events.iter().next().cloned() {
             if has_sites && self.site_events[self.next_cell].theta.value < circle.theta {
                 Some(self.site_event())

@@ -1,37 +1,36 @@
 use std::f64::consts::{PI, FRAC_1_PI};
-use ideal::{Id, IdVec};
+use cgmath::{Vector3, Zero};
+use ideal::IdVec;
 use event::SiteEvent;
 use builder::{Cell, Vertex};
-use ::Position;
 
 const HEIGHT: usize = 5;
 
 #[derive(Debug)]
-pub struct ArcData {
-    index: usize,
+struct ArcData {
     cell: Cell,
     circle_theta: f64,
-    circle_center: Position,
+    circle_center: Vector3<f64>,
     last_theta: f64,
     last_intersection: f64,
     prev: Arc,
     next: Arc,
     prev_skips: [Arc; HEIGHT],
     next_skips: [Arc; HEIGHT],
+    start: Start,
 }
 
 create_id!(Arc);
+create_id!(Start);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BeachLine {
-    next_index: usize,
     arcs: IdVec<Arc, ArcData>,
     free: Vec<Arc>,
     head: Arc,
     len: usize,
     levels: [usize; HEIGHT],
-    arc_starts: Vec<usize>,
-    start_vertices: IdVec<usize, Vertex>,
+    starts: IdVec<Start, Vertex>,
 }
 
 impl BeachLine {
@@ -40,7 +39,7 @@ impl BeachLine {
         if self.len > 1 {
             let mut current = self.head;
             let mut level = HEIGHT - 1;
-            let mut skips = [Arc::invalid(); HEIGHT];
+            let mut skips = [Arc::default(); HEIGHT];
             let site = &sites[cell];
             loop {
                 let next_skip = self.next_skip(current, level);
@@ -82,21 +81,21 @@ impl BeachLine {
     }
 
     pub fn edge(&mut self, arc: Arc, end: Vertex) -> Option<Vertex> {
-        let start = self.arc_starts[self.index(arc)];
-        if start.is_valid() {
-            let vertex = self.start_vertices[start];
-            if vertex.is_valid() {
-                return Some(vertex);
-            } else {
-                self.start_vertices[start] = end;
-            }
+        let start = self.arcs[arc].start;
+        if start.is_invalid() {
+            return None;
         }
-        None
+        let vertex = self.starts[start];
+        if vertex.is_invalid() {
+            self.starts[start] = end;
+            None
+        } else {
+            Some(vertex)
+        }
     }
 
-    pub fn start(&mut self, arc: Arc, start: Vertex) {
-        let index = self.index(arc);
-        self.arc_starts[index] = self.start_vertices.push(start);
+    pub fn start(&mut self, arc: Arc, vertex: Vertex) {
+        self.arcs[arc].start = self.starts.push(vertex);
     }
 
     pub fn neighbors(&self, arc: Arc) -> (Arc, Arc) {
@@ -130,20 +129,13 @@ impl BeachLine {
         self.free.push(arc);
     }
 
-    pub fn temporary(&mut self, arc: Arc, prev: Arc) {
-        let index = self.index(arc);
-        let prev_index = self.index(prev);
-        if index != prev_index {
-            let start = self.start_vertices.push(Vertex::invalid());
-            if index < prev_index {
-                self.set_start(index, start);
-                self.set_start(prev_index, start);
-            } else {
-                self.set_start(prev_index, start);
-                self.set_start(index, start);
-            }
+    pub fn add_common_start(&mut self, arc0: Arc, arc1: Arc) {
+        if arc0 != arc1 {
+            let start = self.starts.push(Vertex::invalid());
+            self.arcs[arc0].start = start;
+            self.arcs[arc1].start = start;
         } else {
-            self.set_start(index, Id::invalid());
+            self.arcs[arc1].start = Start::invalid();
         }
     }
     
@@ -155,11 +147,11 @@ impl BeachLine {
         self.arcs[arc].circle_theta
     }
 
-    pub fn circle_center(&self, arc: Arc) -> Position {
+    pub fn circle_center(&self, arc: Arc) -> Vector3<f64> {
         self.arcs[arc].circle_center
     }
 
-    pub fn attach_circle(&mut self, arc: Arc, theta: f64, center: Position) {
+    pub fn attach_circle(&mut self, arc: Arc, theta: f64, center: Vector3<f64>) {
         self.arcs[arc].circle_center = center;
         self.arcs[arc].circle_theta = theta;
     }
@@ -176,38 +168,24 @@ impl BeachLine {
         self.arcs[arc].next
     }
 
-    pub fn index(&self, arc: Arc) -> usize {
-        self.arcs[arc].index
-    }
-
     fn create_arc(&mut self, cell: Cell) -> Arc {
         let data = ArcData {
-            index: self.next_index,
             cell: cell,
-            circle_center: Position::new(0.0, 0.0, 0.0),
+            circle_center: Vector3::zero(),
             circle_theta: ::std::f64::MIN,
             last_theta: -1.0,
             last_intersection: 0.0,
-            prev: Arc::invalid(),
-            next: Arc::invalid(),
-            prev_skips: [Arc::invalid(); HEIGHT],
-            next_skips: [Arc::invalid(); HEIGHT],
+            prev: Arc::default(),
+            next: Arc::default(),
+            prev_skips: [Arc::default(); HEIGHT],
+            next_skips: [Arc::default(); HEIGHT],
+            start: Start::default(),
         };
-        self.next_index += 1;
         if let Some(arc) = self.free.pop() {
             self.arcs[arc] = data;
             arc
         } else {
             self.arcs.push(data)
-        }
-    }
-
-    fn set_start(&mut self, index: usize, start: usize) {
-        if index < self.arc_starts.len() {
-            self.arc_starts[index] = start;
-        } else {
-            assert_eq!(self.arc_starts.len(), index);
-            self.arc_starts.push(start);
         }
     }
 
@@ -321,17 +299,3 @@ impl BeachLine {
     }
 }
 
-impl Default for BeachLine {
-    fn default() -> Self {
-        BeachLine {
-            next_index: 0,
-            arcs: Default::default(),
-            free: Default::default(),
-            head: Arc::invalid(),
-            len: 0,
-            levels: [0; HEIGHT],
-            arc_starts: Default::default(),
-            start_vertices: Default::default(),
-        }
-    }
-}

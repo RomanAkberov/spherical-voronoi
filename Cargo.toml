@@ -8,7 +8,7 @@ keywords = ["voronoi", "sphere", "geometry"]
 repository = "https://github.com/RomanAkberov/spherical_voronoi"
 
 [dependencies]
-cgmath = "0.13"
-serde = "0.9"
-serde_derive = "0.9"
-ideal = "0.3"
+cgmath = "0.14"
+serde = "1.0"
+serde_derive = "1.0"
+ideal = "0.5"

@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
-use cgmath::InnerSpace;
+use cgmath::{InnerSpace};
 use beach_line::Arc;
-use ::Position;
+use super::Position;
 
 #[derive(Debug, Copy, Clone)]
 pub struct CircleEvent {
