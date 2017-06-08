@@ -1,17 +1,25 @@
-use std::f64::consts::{PI, FRAC_1_PI};
-use std::usize::MAX;
+use std::usize::MAX as INVALID;
+use std::f64::MIN as F64_MIN;
 use cgmath::prelude::*;
 use event::SiteEvent;
-use common::{Point, Vertex, Cell};
+use super::Point;
 
 const HEIGHT: usize = 5;
 
+struct Intersection {
+    theta: f64,
+    phi: f64,
+}
+
+struct Circle {
+    theta: f64,
+    center: Point,
+}
+
 struct ArcData {
-    cell: Cell,
-    circle_theta: f64,
-    circle_center: Point,
-    last_theta: f64,
-    last_intersection: f64,
+    site_index: usize,
+    circle: Circle,
+    intersection: Intersection,
     prev: Arc,
     next: Arc,
     prev_skips: [Arc; HEIGHT],
@@ -31,17 +39,17 @@ pub struct BeachLine {
     head: Arc,
     len: usize,
     levels: [usize; HEIGHT],
-    starts: Vec<Vertex>,
+    starts: Vec<usize>,
 }
 
 impl BeachLine {
-    pub fn insert(&mut self, cell: Cell, sites: &[SiteEvent]) -> Arc {
-        let arc = self.create_arc(cell);
+    pub fn insert(&mut self, site_index: usize, sites: &[SiteEvent]) -> Arc {
+        let arc = self.create_arc(site_index);
         if self.len > 1 {
             let mut current = self.head;
             let mut level = HEIGHT - 1;
-            let mut skips = [Arc(MAX); HEIGHT];
-            let site = &sites[cell.0];
+            let mut skips = [Arc(INVALID); HEIGHT];
+            let site = &sites[site_index];
             loop {
                 let next_skip = self.next_skip(current, level);
                 let start = self.intersect_with_next(current, site, sites);
@@ -65,12 +73,10 @@ impl BeachLine {
                 start = end;
                 end = self.intersect_with_next(next, site, sites);
             }
-            current = next;
-            let current_cell = self.cell(current);
-            let twin = self.create_arc(current_cell);
-            let prev = self.prev(current);
-            self.add_links(twin, prev, current, &mut skips);
-            self.add_links(arc, twin, current, &mut skips);
+            let site_index = self.site_index(next);
+            let twin = self.create_arc(site_index);
+            self.add_links(twin, current, next, &mut skips);
+            self.add_links(arc, twin, next, &mut skips);
         } else {
             if self.len == 0 {
                 self.head = arc;
@@ -81,13 +87,13 @@ impl BeachLine {
         arc
     }
 
-    pub fn edge(&mut self, arc: Arc, end: Vertex) -> Option<Vertex> {
+    pub fn edge(&mut self, arc: Arc, end: usize) -> Option<usize> {
         let start = self.data(arc).start;
-        if start.0 == MAX {
+        if start.0 == INVALID {
             return None;
         }
         let vertex = self.starts[start.0];
-        if vertex.0 == MAX {
+        if vertex == INVALID {
             self.starts[start.0] = end;
             None
         } else {
@@ -95,7 +101,7 @@ impl BeachLine {
         }
     }
 
-    pub fn set_start(&mut self, arc: Arc, vertex: Vertex) {
+    pub fn set_start(&mut self, arc: Arc, vertex: usize) {
         self.data_mut(arc).start = self.add_start(vertex);
     }
 
@@ -132,34 +138,32 @@ impl BeachLine {
 
     pub fn add_common_start(&mut self, arc0: Arc, arc1: Arc) {
         if arc0 != arc1 {
-            let start = self.add_start(Vertex(MAX));
+            let start = self.add_start(INVALID);
             self.data_mut(arc0).start = start;
             self.data_mut(arc1).start = start;
         } else {
-            self.data_mut(arc0).start = Start(MAX);
+            self.data_mut(arc0).start = Start(INVALID);
         }
     }
     
-    pub fn cell(&self, arc: Arc) -> Cell {
-        self.data(arc).cell
+    pub fn site_index(&self, arc: Arc) -> usize {
+        self.data(arc).site_index
     }
 
     pub fn circle_theta(&self, arc: Arc) -> f64 {
-        self.data(arc).circle_theta
+        self.data(arc).circle.theta
     }
 
     pub fn circle_center(&self, arc: Arc) -> Point {
-        self.data(arc).circle_center
+        self.data(arc).circle.center
     }
 
     pub fn attach_circle(&mut self, arc: Arc, theta: f64, center: Point) {
-        let data = self.data_mut(arc);
-        data.circle_center = center;
-        data.circle_theta = theta;
+        self.data_mut(arc).circle = Circle { theta, center };
     }
 
     pub fn detach_circle(&mut self, arc: Arc) {
-        self.data_mut(arc).circle_theta = ::std::f64::MIN;
+        self.data_mut(arc).circle.theta = F64_MIN;
     }
 
     pub fn prev(&self, arc: Arc) -> Arc {
@@ -170,18 +174,16 @@ impl BeachLine {
         self.data(arc).next
     }
 
-    fn create_arc(&mut self, cell: Cell) -> Arc {
+    fn create_arc(&mut self, site_index: usize) -> Arc {
         let data = ArcData {
-            cell: cell,
-            circle_center: Point::zero(),
-            circle_theta: ::std::f64::MIN,
-            last_theta: -1.0,
-            last_intersection: 0.0,
-            prev: Arc(MAX),
-            next: Arc(MAX),
-            prev_skips: [Arc(MAX); HEIGHT],
-            next_skips: [Arc(MAX); HEIGHT],
-            start: Start(MAX),
+            site_index,
+            circle: Circle { center: Point::zero(), theta: F64_MIN },
+            intersection: Intersection { theta: F64_MIN, phi: F64_MIN },
+            prev: Arc(INVALID),
+            next: Arc(INVALID),
+            prev_skips: [Arc(INVALID); HEIGHT],
+            next_skips: [Arc(INVALID); HEIGHT],
+            start: Start(INVALID),
         };
         if let Some(arc) = self.free.pop() {
             *self.data_mut(arc) = data;
@@ -209,33 +211,16 @@ impl BeachLine {
         self.data_mut(arc).next_skips[level] = next;
     }
 
-    fn intersect_with_next(&mut self, arc: Arc, site: &SiteEvent, sites: &[SiteEvent]) -> f64 {
-        let arc_point = &sites[self.cell(arc).0];
-        let next_point = &sites[self.cell(self.next(arc)).0];
-        let data = self.data_mut(arc);
-        if data.last_theta < site.theta.value {
-            data.last_theta = site.theta.value;
-            data.last_intersection = BeachLine::intersect(arc_point, next_point, site);
+    fn intersect_with_next(&mut self, arc: Arc, site: &SiteEvent, sites: &[SiteEvent]) -> f64 {       
+        let prev_site = &sites[self.site_index(arc)];
+        let next_site = &sites[self.site_index(self.next(arc))];
+        let intersection = &mut self.data_mut(arc).intersection;
+        let theta = site.theta();
+        if intersection.theta < theta {
+            intersection.theta = theta;
+            intersection.phi = site.intersect(prev_site, next_site);
         }
-        data.last_intersection
-    }
-
-    fn intersect(site0: &SiteEvent, site1: &SiteEvent, site2: &SiteEvent) -> f64 {
-        let u1 = (site2.theta.cos - site1.theta.cos) * site0.theta.sin;
-        let u2 = (site2.theta.cos - site0.theta.cos) * site1.theta.sin;
-        let a = u1 * site0.phi.cos - u2 * site1.phi.cos;
-        let b = u1 * site0.phi.sin - u2 * site1.phi.sin;
-        let c = (site0.theta.cos - site1.theta.cos) * site2.theta.sin;
-        let length = (a * a + b * b).sqrt();
-        let gamma = a.atan2(b);
-        let phi_plus_gamma = (c / length).asin();
-        BeachLine::wrap(phi_plus_gamma - gamma - site2.phi.value)
-    }
-
-    fn wrap(mut phi: f64) -> f64 {
-        phi *= 0.5 * FRAC_1_PI;
-        phi -= phi.floor();
-        phi * 2.0 * PI
+        intersection.phi
     }
 
     fn add_links(&mut self, arc: Arc, prev: Arc, next: Arc, skips: &mut [Arc; HEIGHT]) {
@@ -244,10 +229,10 @@ impl BeachLine {
         self.data_mut(prev).next = arc;
         self.data_mut(next).prev = arc;
         let height = self.insertion_height();
-        for level in 0..height {
+        for level in 0 .. height {
             let prev = skips[level];
             let mut next = self.next_skip(prev, level);
-            if next.0 == MAX {
+            if next.0 == INVALID {
                 next = prev;
             }
             self.set_prev_skip(arc, level, prev);
@@ -275,8 +260,8 @@ impl BeachLine {
     }
 
     fn height(&self, arc: Arc) -> usize {
-        for level in 0..HEIGHT {
-            if self.next_skip(arc, level).0 == MAX {
+        for level in 0 .. HEIGHT {
+            if self.next_skip(arc, level).0 == INVALID {
                 return level;
             }
         }
@@ -290,7 +275,7 @@ impl BeachLine {
         let mut best_height = 1;
         let mut best_ratio = self.levels[0];
         let mut multiplier = 1;
-        for level in 0..HEIGHT {
+        for level in 0 .. HEIGHT {
             let ratio = self.levels[level] * multiplier;
             if ratio < best_ratio {
                 best_ratio = ratio;
@@ -301,7 +286,7 @@ impl BeachLine {
         best_height
     }
 
-    fn add_start(&mut self, vertex: Vertex) -> Start {
+    fn add_start(&mut self, vertex: usize) -> Start {
         self.starts.push(vertex);
         Start(self.starts.len() - 1)
     }
@@ -320,7 +305,7 @@ impl Default for BeachLine {
         Self {
             arcs: Vec::default(),
             free: Vec::default(),
-            head: Arc(MAX),
+            head: Arc(INVALID),
             len: 0,
             levels: [0; HEIGHT],
             starts: Vec::default(),

@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
+use std::f64::consts::{PI, FRAC_1_PI};
 use cgmath::prelude::*;
 use beach_line::Arc;
-use common::Point;
+use super::Point;
 
 #[derive(Copy, Clone)]
 pub struct CircleEvent {
@@ -36,30 +37,25 @@ impl PartialEq for CircleEvent {
 
 impl Eq for CircleEvent {}
 
-
 #[derive(Copy, Clone)]
-pub struct Angle {
-    pub value: f64,
-    pub sin: f64,
-    pub cos: f64,
+struct Angle {
+    value: f64,
+    sin: f64,
+    cos: f64,
 }
 
 impl From<f64> for Angle {
     fn from(value: f64) -> Self {
         let (sin, cos) = value.sin_cos();
-        Angle {
-            value: value,
-            sin: sin,
-            cos: cos,
-        }
+        Angle { value, sin, cos }
     }
 }
 
 #[derive(Copy, Clone)]
 pub struct SiteEvent {
-    pub theta: Angle,
-    pub phi: Angle,
     pub point: Point,
+    theta: Angle,
+    phi: Angle,
 }
 
 impl SiteEvent {
@@ -67,10 +63,26 @@ impl SiteEvent {
         let point = point.normalize();
         let (theta, phi) = (point.z.acos(), point.y.atan2(point.x));
         SiteEvent {
+            point,
             theta: Angle::from(theta),
             phi: Angle::from(phi),
-            point,
         }
+    }
+
+    pub fn theta(&self) -> f64 {
+        self.theta.value
+    }
+
+    pub fn intersect(&self, site0: &SiteEvent, site1: &SiteEvent) -> f64 {
+        let u1 = (self.theta.cos - site1.theta.cos) * site0.theta.sin;
+        let u2 = (self.theta.cos - site0.theta.cos) * site1.theta.sin;
+        let a = u1 * site0.phi.cos - u2 * site1.phi.cos;
+        let b = u1 * site0.phi.sin - u2 * site1.phi.sin;
+        let c = (site0.theta.cos - site1.theta.cos) * self.theta.sin;
+        let length = (a * a + b * b).sqrt();
+        let gamma = a.atan2(b);
+        let phi_plus_gamma = (c / length).asin();
+        wrap(phi_plus_gamma - gamma - self.phi.value)
     }
 }
 
@@ -99,3 +111,9 @@ impl PartialEq for SiteEvent {
 }
 
 impl Eq for SiteEvent {}
+
+fn wrap(mut phi: f64) -> f64 {
+    phi *= 0.5 * FRAC_1_PI;
+    phi -= phi.floor();
+    phi * 2.0 * PI
+}

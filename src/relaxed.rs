@@ -1,6 +1,6 @@
 use cgmath::prelude::*;
 use voronoi;
-use common::Point;
+use super::Point;
 
 #[derive(Default)]
 struct CentroidVisitor {
