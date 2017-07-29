@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::f64::consts::{PI, FRAC_1_PI};
-use cgmath::prelude::*;
+use cgmath::InnerSpace;
 use beach_line::Arc;
 use super::Point;
 
@@ -59,8 +59,8 @@ pub struct SiteEvent {
 }
 
 impl SiteEvent {
-    pub fn new(point: &Point) -> Self {
-        let point = point.normalize();
+    pub fn new<P: AsRef<[f64; 3]>>(point: &P) -> Self {
+        let point = Point::from(*point.as_ref()).normalize();
         let (theta, phi) = (point.z.acos(), point.y.atan2(point.x));
         SiteEvent {
             point,
