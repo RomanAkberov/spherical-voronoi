@@ -1,137 +1,120 @@
-use std::collections::BTreeSet;
 use cgmath::prelude::*;
-use event::{SiteEvent, CircleEvent};
-use beach_line::{BeachLine, Arc};
+use event::CellEvent;
+use beach_line::{BeachLine, ArcId};
 use super::Point;
 
-pub trait Visitor {
-    fn vertex(&mut self, point: Point, cells: [usize; 3]);
-    fn edge(&mut self, vertices: [usize; 2]);
-    fn cell(&mut self);
-}
-
+#[derive(Default)]
 struct Voronoi {
-    vertex_index: usize,
-    site_index: usize,
-    site_events: Vec<SiteEvent>,
-    circle_events: BTreeSet<CircleEvent>,
+    cell_index: usize,
+    cell_events: Vec<CellEvent>,
     beach: BeachLine,
 }
 
 impl Voronoi {
-    fn new(points: &[Point]) -> Self {
-        let mut site_events: Vec<SiteEvent> = points.iter().map(SiteEvent::new).collect();
-        site_events.sort();
-        Self {
-            vertex_index: 0,
-            site_index: 0,
-            site_events,
-            circle_events: Default::default(),
-            beach: Default::default(),
-        }
+    fn begin(&mut self, points: &[Point]) {
+        self.cell_events.extend(points.iter().map(CellEvent::new));
     }
 
-    fn build<V: Visitor>(mut self, visitor: &mut V) {
+    fn relax(&mut self, relaxer: &mut Relaxer) {
+        for (cell_event, point) in self.cell_events.iter_mut().zip(relaxer.points.iter_mut()) {
+            *cell_event = CellEvent::new(point);
+            *point = Point::zero();
+        }
+        self.cell_index = 0;
+        self.beach.clear();
+    }
+
+    fn build<V: Visitor>(&mut self, visitor: &mut V) {
+        self.cell_events.sort_by(|s0, s1| s0.theta.partial_cmp(&s1.theta).unwrap());
         loop {
-            let has_sites = self.site_index < self.site_events.len();
-            if let Some(circle) = self.circle_events.iter().next().cloned() {
-                if has_sites && self.site_events[self.site_index].theta < circle.theta {
-                    self.site_event(visitor);
+            let has_cells = self.cell_index < self.cell_events.len();
+            let has_vertices = self.beach.has_vertices();
+            if has_cells {
+                if has_vertices && self.beach.top_theta() < self.cell_events[self.cell_index].theta {
+                    self.handle_vertex_event(visitor);
                 } else {
-                    self.circle_event(&circle, visitor);
+                    self.handle_cell_event();
                 }
-            } else if has_sites {
-                self.site_event(visitor);
+            } else if has_vertices {
+                self.handle_vertex_event(visitor);
             } else {
                 break;
             }
         }
     }
 
-    fn site_event<V: Visitor>(&mut self, visitor: &mut V) {
-        visitor.cell();
-        let theta = self.site_events[self.site_index].theta;
-        let arc = self.beach.insert(self.site_index, &self.site_events);
-        let (prev, next) = self.beach.neighbors(arc);
-        self.beach.add_common_start(arc, prev);
-        if prev != next {
-            self.attach_circle(prev, theta);
-            self.attach_circle(next, theta);
-        }
-        self.site_index += 1;
+    fn handle_cell_event(&mut self) {
+        let event = self.cell_events[self.cell_index];
+        let arc = self.beach.insert(self.cell_index, &event);
+        let neighbors = self.beach[arc].neighbors();
+        self.attach_vertex(neighbors.prev);
+        self.attach_vertex(neighbors.next);
+        self.cell_index += 1;
     }
 
-    fn circle_event<V: Visitor>(&mut self, event: &CircleEvent, visitor: &mut V) {
-        let arc = event.arc;
-        let theta = event.theta;
-        let (prev, next) = self.beach.neighbors(arc);
-        self.detach_circle(arc);
-        self.detach_circle(prev);
-        self.detach_circle(next);
-        let point = self.beach.circle_center(arc);
-        let cell0 = self.beach.site_index(prev);
-        let cell1 = self.beach.site_index(arc);
-        let cell2 = self.beach.site_index(next);
-        visitor.vertex(point.into(), [cell0, cell1, cell2]);
-        let vertex_index = self.vertex_index;
-        self.edge(prev, vertex_index, visitor);
-        self.edge(arc, vertex_index, visitor);
-        self.beach.remove(arc);
-        if self.beach.prev(prev) == next {
-            self.edge(next, vertex_index, visitor);
-            self.beach.remove(prev);
-            self.beach.remove(next);
-        } else {
-            if self.attach_circle(prev, theta) {
-                self.beach.set_start(prev, vertex_index);
-            }
-            self.attach_circle(next, theta);
-        }
-        self.vertex_index += 1;
-    }
-
-    fn attach_circle(&mut self, arc: Arc, min: f64) -> bool {
-        self.detach_circle(arc);
-        let (prev, next) = self.beach.neighbors(arc);
-        let point = self.arc_point(arc);
-        let from_prev = self.arc_point(prev) - point;
-        let from_next = self.arc_point(next) - point;
-        let center = from_prev.cross(from_next).normalize();
-        let theta = center.z.acos() + center.dot(point).acos();
-        if theta >= min {
-            self.beach.attach_circle(arc, theta, center);
-            self.circle_events.insert(CircleEvent {
-                theta: theta,
-                arc: arc,
-            });
-            true
-        } else {
-            false
+    fn handle_vertex_event<V: Visitor>(&mut self, visitor: &mut V) {
+        let arc = self.beach.heap_pop();
+        let neighbors = self.beach[arc].neighbors();
+        if neighbors.prev != neighbors.next {
+            visitor.visit(self.beach[arc].vertex, [
+                self.beach[neighbors.prev].cell_index,
+                self.beach[arc].cell_index,
+                self.beach[neighbors.next].cell_index,
+            ]);
+            self.beach.remove(arc);
+            self.attach_vertex(neighbors.prev);
+            self.attach_vertex(neighbors.next);
         }
     }
 
-    fn detach_circle(&mut self, arc: Arc) {
-        let theta = self.beach.circle_theta(arc);
-        if theta >= 0.0 {
-            self.circle_events.remove(&CircleEvent {
-                arc: arc,
-                theta: theta,
-            });
-            self.beach.detach_circle(arc);
+    fn attach_vertex(&mut self, arc: ArcId) {
+        let neighbors = self.beach[arc].neighbors();
+        if neighbors.prev == neighbors.next {
+            return;
         }
-    }
-
-    fn arc_point(&self, arc: Arc) -> Point {
-        self.site_events[self.beach.site_index(arc)].point
-    }
-
-    fn edge<V: Visitor>(&mut self, arc: Arc, start: usize, visitor: &mut V) {
-        if let Some(end) = self.beach.edge(arc, start) {
-            visitor.edge([start, end]);
+        let point = self.beach[arc].focus;
+        let to_prev = self.beach[neighbors.prev].focus - point;
+        let to_next = self.beach[neighbors.next].focus - point;
+        let vertex = to_prev.cross(to_next).normalize();
+        let theta = vertex.z.acos() + vertex.dot(point).acos();
+        if theta < self.beach[neighbors.prev].theta && theta < self.beach[neighbors.next].theta {
+            self.beach[arc].vertex = vertex;
+            self.beach[arc].theta = theta;
+            self.beach.heap_update(arc);
         }
     }
 }
 
-pub fn build<V: Visitor>(points: &[Point], visitor: &mut V) {
-    Voronoi::new(points).build(visitor);
+#[derive(Default)]
+struct Relaxer {
+    points: Vec<Point>,
+}
+
+impl Relaxer {
+    fn new(num_points: usize) -> Self {
+        Self { points: vec![Point::zero(); num_points] }
+    }
+}
+
+impl Visitor for Relaxer {
+    fn visit(&mut self, point: Point, cells: [usize; 3]) {
+        self.points[cells[0]] += point;
+        self.points[cells[1]] += point;
+        self.points[cells[2]] += point;
+    }
+}
+
+pub trait Visitor {
+    fn visit(&mut self, point: Point, cells: [usize; 3]);
+}
+
+pub fn build_relaxed<V: Visitor>(visitor: &mut V, points: &[Point], num_relaxations: usize) {
+    let mut voronoi = Voronoi::default();
+    let mut relaxer = Relaxer::new(points.len());
+    voronoi.begin(points);
+    for _ in 0 .. num_relaxations {
+        voronoi.build(&mut relaxer);
+        voronoi.relax(&mut relaxer);
+    }
+    voronoi.build(visitor);
 }

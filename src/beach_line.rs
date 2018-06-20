@@ -1,307 +1,275 @@
-use std::usize::MAX as INVALID;
-use std::f64::MIN as F64_MIN;
+use std::f64::{MAX as F64_MAX};
+use std::usize::{MAX as USIZE_MAX};
+use std::ops::{Index, IndexMut};
 use cgmath::prelude::*;
-use event::SiteEvent;
+use event::CellEvent;
 use super::Point;
 
 const HEIGHT: usize = 5;
 
-struct Intersection {
+#[derive(Copy, Clone, Default)]
+struct Spherical {
     theta: f64,
     phi: f64,
 }
 
-struct Circle {
-    theta: f64,
-    center: Point,
-}
-
-struct ArcData {
-    site_index: usize,
-    circle: Circle,
-    intersection: Intersection,
-    prev: Arc,
-    next: Arc,
-    prev_skips: [Arc; HEIGHT],
-    next_skips: [Arc; HEIGHT],
-    start: Start,
-}
-
 #[derive(Copy, Clone, PartialEq)]
-pub struct Arc(usize);
+pub struct ArcId(u32);
 
-#[derive(Copy, Clone)]
-struct Start(usize);
+impl ArcId {
+    pub const NONE: Self = ArcId(::std::u32::MAX);
+}
 
+impl Default for ArcId {
+    fn default() -> Self {
+        ArcId::NONE
+    }
+}
+
+#[derive(Copy, Clone, Default)]
+pub struct Link {
+    pub prev: ArcId,
+    pub next: ArcId,
+}
+
+pub struct Arc {
+    pub cell_index: usize,
+    pub focus: Point,
+    pub vertex: Point,
+    pub theta: f64,
+    cached_intersection: Spherical,
+    links: [Link; HEIGHT],
+    heap_index: usize,
+}
+
+impl Arc {
+    #[inline]
+    pub fn neighbors(&self) -> Link {
+        self.links[0]
+    }
+    
+    #[inline]
+    fn next(&self) -> ArcId {
+        self.links[0].next
+    }
+
+    fn height(&self) -> usize {
+        (0 .. HEIGHT).filter(|&level| self.links[level].next == ArcId::NONE).next().unwrap_or(HEIGHT)
+    }
+}
+
+#[derive(Default)]
 pub struct BeachLine {
-    arcs: Vec<ArcData>,
-    free: Vec<Arc>,
-    head: Arc,
+    arcs: Vec<Arc>,
+    free: Vec<ArcId>,
+    head: ArcId,
     len: usize,
     levels: [usize; HEIGHT],
-    starts: Vec<usize>,
+    heap: Vec<ArcId>,
 }
 
 impl BeachLine {
-    pub fn insert(&mut self, site_index: usize, sites: &[SiteEvent]) -> Arc {
-        let arc = self.create_arc(site_index);
+    pub fn insert(&mut self, cell_index: usize, event: &CellEvent) -> ArcId {
+        let arc = self.create_arc(cell_index, event.point);
         if self.len > 1 {
             let mut current = self.head;
-            let mut level = HEIGHT - 1;
-            let mut skips = [Arc(INVALID); HEIGHT];
-            let site = &sites[site_index];
-            loop {
-                let next_skip = self.next_skip(current, level);
-                let start = self.intersect_with_next(current, site, sites);
-                let end = self.intersect_with_next(next_skip, site, sites);
-                if start < end {
-                    current = next_skip;
+            let mut next = ArcId::NONE;
+            let mut height = HEIGHT;
+            let mut links = [ArcId::NONE; HEIGHT];
+            while height > 0 {
+                next = self[current].links[height - 1].next;
+                if self.intersect(current, event) < self.intersect(next, event) {
+                    current = next;
                 } else {
-                    skips[level] = current;
-                    if level > 0 {
-                        level -= 1;
-                    } else {
-                        break;
-                    }
+                    links[height - 1] = current;
+                    height -= 1;
                 }
             }
-            let next = self.next(current);
-            let site_index = self.site_index(next);
-            let twin = self.create_arc(site_index);
-            self.add_links(twin, current, next, &mut skips);
-            self.add_links(arc, twin, next, &mut skips);
+            let twin_index = self[next].cell_index;
+            let twin_focus = self[next].focus;
+            let twin = self.create_arc(twin_index, twin_focus);
+            self.add_links(twin, &mut links);
+            self.add_links(arc, &mut links);
         } else {
             if self.len == 0 {
                 self.head = arc;
             }
             let head = self.head;
-            self.add_links(arc, head, head, &mut [head; HEIGHT]);
+            self.add_links(arc, &mut [head; HEIGHT]);
         }
         arc
     }
 
-    pub fn edge(&mut self, arc: Arc, end: usize) -> Option<usize> {
-        let start = self.data(arc).start;
-        if start.0 == INVALID {
-            return None;
-        }
-        let vertex = self.starts[start.0];
-        if vertex == INVALID {
-            self.starts[start.0] = end;
-            None
-        } else {
-            Some(vertex)
-        }
-    }
-
-    pub fn set_start(&mut self, arc: Arc, vertex: usize) {
-        self.data_mut(arc).start = self.add_start(vertex);
-    }
-
-    pub fn neighbors(&self, arc: Arc) -> (Arc, Arc) {
-        let data = self.data(arc);
-        (data.prev, data.next)
-    }
-
-    pub fn remove(&mut self, arc: Arc) {
+    pub fn remove(&mut self, arc: ArcId) {
         let head = self.head;
         if arc == head {
-            let next_skip = self.next_skip(self.head, HEIGHT - 1);
-            if next_skip != self.head {
-                self.head = next_skip;
-            } else {
-                // promote next to HEIGHT
-                let next = self.next(self.head);
-                let height = self.height(next);
+            let mut new_head = self[self.head].links[HEIGHT - 1].next;
+            if new_head == self.head {
+                new_head = self[self.head].next();
+                // promote new_head to HEIGHT
+                let height = self[new_head].height();
                 self.levels[height - 1] -= 1;
                 self.levels[HEIGHT - 1] += 1;
-                for level in height..HEIGHT {
-                    let next_skip = self.next_skip(self.head, level);
-                    self.set_prev_skip(next_skip, level, next);
-                    self.set_next_skip(next, level, next_skip);
-                    self.set_prev_skip(next, level, head);
-                    self.set_next_skip(head, level, next);
+                for level in height .. HEIGHT {
+                    let next = self[self.head].links[level].next;
+                    self[next].links[level].prev = new_head;
+                    self[new_head].links[level] = Link { prev: head, next };
+                    self[head].links[level].next = new_head;
                 }
-                self.head = next;
             }
+            self.head = new_head;
         }
-        self.remove_links(arc);
+        let height = self[arc].height();
+        for level in 0 .. height {
+            let link = self[arc].links[level];
+            self[link.next].links[level].prev = link.prev;
+            self[link.prev].links[level].next = link.next;
+        }
+        self.len -= 1;
+        self.levels[height - 1] -= 1;
         self.free.push(arc);
     }
 
-    pub fn add_common_start(&mut self, arc0: Arc, arc1: Arc) {
-        if arc0 != arc1 {
-            let start = self.add_start(INVALID);
-            self.data_mut(arc0).start = start;
-            self.data_mut(arc1).start = start;
+    pub fn heap_update(&mut self, arc: ArcId) {
+        let mut index = self[arc].heap_index;
+        let theta = self[arc].theta;
+        if index == USIZE_MAX {
+            index = self.heap.len();
+            self.heap.push(arc);
+        }
+        while index > 0 {
+            let parent_index = (index - 1) / 2;
+            let parent = self.heap[parent_index];
+            if theta < self[parent].theta {
+                self.heap[index] = parent;
+                self[parent].heap_index = index;
+            } else {
+                break;
+            }
+            index = parent_index;
+        }
+        self.heap[index] = arc;
+        self[arc].heap_index = index;
+    }
+
+    pub fn has_vertices(&self) -> bool {
+        !self.heap.is_empty()
+    }
+
+    pub fn heap_pop(&mut self) -> ArcId {
+        let first = self.heap[0];
+        let last = self.heap.pop().unwrap();
+        let theta = self[last].theta;
+        let mut index = 0;
+        while 2 * index + 1 < self.heap.len() {
+            // left child by default
+            let mut child_index = 2 * index + 1;
+            let mut child = self.heap[child_index];
+            // check right child
+            let right_index = child_index + 1;
+            if right_index < self.heap.len() {
+                let right_child = self.heap[right_index];
+                if self[right_child].theta < self[child].theta {
+                    child_index = right_index;
+                    child = right_child;
+                }
+            }
+            if theta < self[child].theta {
+                break;
+            }
+            self.heap[index] = child;
+            self[child].heap_index = index;
+            index = child_index;
+        }
+        if self.heap.len() > 0 {
+            self.heap[index] = last;
+            self[last].heap_index = index;
+        }
+        first
+    }
+
+    pub fn clear(&mut self) {
+        self.head = ArcId::NONE;
+        self.len = 0;
+        self.levels = [0; HEIGHT];
+    }
+
+    pub fn top_theta(&self) -> f64 {
+        if let Some(&first) = self.heap.first() {
+            self[first].theta
         } else {
-            self.data_mut(arc0).start = Start(INVALID);
+            F64_MAX
         }
     }
-    
-    pub fn site_index(&self, arc: Arc) -> usize {
-        self.data(arc).site_index
-    }
-
-    pub fn circle_theta(&self, arc: Arc) -> f64 {
-        self.data(arc).circle.theta
-    }
-
-    pub fn circle_center(&self, arc: Arc) -> Point {
-        self.data(arc).circle.center
-    }
-
-    pub fn attach_circle(&mut self, arc: Arc, theta: f64, center: Point) {
-        self.data_mut(arc).circle = Circle { theta, center };
-    }
-
-    pub fn detach_circle(&mut self, arc: Arc) {
-        self.data_mut(arc).circle.theta = F64_MIN;
-    }
-
-    pub fn prev(&self, arc: Arc) -> Arc {
-        self.data(arc).prev
-    }
-
-    pub fn next(&self, arc: Arc) -> Arc {
-        self.data(arc).next
-    }
-
-    fn create_arc(&mut self, site_index: usize) -> Arc {
-        let data = ArcData {
-            site_index,
-            circle: Circle { center: Point::zero(), theta: F64_MIN },
-            intersection: Intersection { theta: F64_MIN, phi: F64_MIN },
-            prev: Arc(INVALID),
-            next: Arc(INVALID),
-            prev_skips: [Arc(INVALID); HEIGHT],
-            next_skips: [Arc(INVALID); HEIGHT],
-            start: Start(INVALID),
+        
+    fn create_arc(&mut self, cell_index: usize, focus: Point) -> ArcId {
+        let data = Arc {
+            cell_index,
+            focus,
+            vertex: Point::zero(),
+            theta: F64_MAX,
+            cached_intersection: Spherical::default(),
+            links: Default::default(),
+            heap_index: USIZE_MAX,
         };
         if let Some(arc) = self.free.pop() {
-            *self.data_mut(arc) = data;
+            self[arc] = data;
             arc
         } else {
             self.arcs.push(data);
-            Arc(self.arcs.len() - 1)
+            ArcId(self.arcs.len() as u32 - 1)
         }
     }
 
-    fn skips(&self, arc: Arc, level: usize) -> (Arc, Arc) {
-        let data = self.data(arc);
-        (data.prev_skips[level], data.next_skips[level])
+    fn intersect(&mut self, arc: ArcId, event: &CellEvent) -> f64 {
+        let cached = self[arc].cached_intersection;
+        let theta = event.theta;
+        if cached.theta >= theta {
+            return cached.phi;
+        }       
+        let point0 = self[arc].focus;
+        let point1 = self[self[arc].next()].focus;
+        let phi = event.intersect(&point0, &point1);
+        self[arc].cached_intersection = Spherical { theta, phi };
+        phi
     }
 
-    fn set_prev_skip(&mut self, arc: Arc, level: usize, prev: Arc) {
-        self.data_mut(arc).prev_skips[level] = prev;
-    }
-
-    fn next_skip(&self, arc: Arc, level: usize) -> Arc {
-        self.data(arc).next_skips[level]
-    }
-
-    fn set_next_skip(&mut self, arc: Arc, level: usize, next: Arc) {
-        self.data_mut(arc).next_skips[level] = next;
-    }
-
-    fn intersect_with_next(&mut self, arc: Arc, site: &SiteEvent, sites: &[SiteEvent]) -> f64 {       
-        let prev_site = &sites[self.site_index(arc)];
-        let next_site = &sites[self.site_index(self.next(arc))];
-        let intersection = &mut self.data_mut(arc).intersection;
-        let theta = site.theta;
-        if intersection.theta < theta {
-            intersection.theta = theta;
-            intersection.phi = site.intersect(prev_site, next_site);
-        }
-        intersection.phi
-    }
-
-    fn add_links(&mut self, arc: Arc, prev: Arc, next: Arc, skips: &mut [Arc; HEIGHT]) {
-        self.data_mut(arc).prev = prev;
-        self.data_mut(arc).next = next;
-        self.data_mut(prev).next = arc;
-        self.data_mut(next).prev = arc;
+    fn add_links(&mut self, arc: ArcId, links: &mut [ArcId; HEIGHT]) {
         let height = self.insertion_height();
         for level in 0 .. height {
-            let prev = skips[level];
-            let mut next = self.next_skip(prev, level);
-            if next.0 == INVALID {
+            let prev = links[level];
+            let mut next = self[prev].links[level].next;
+            if next == ArcId::NONE {
                 next = prev;
             }
-            self.set_prev_skip(arc, level, prev);
-            self.set_next_skip(arc, level, next);
-            self.set_prev_skip(next, level, arc);
-            self.set_next_skip(prev, level, arc);
-            skips[level] = arc;
+            self[arc].links[level] = Link { prev, next };
+            self[next].links[level].prev = arc;
+            self[prev].links[level].next = arc;
+            links[level] = arc;
         }
         self.len += 1;
         self.levels[height - 1] += 1;
     }
 
-    fn remove_links(&mut self, arc: Arc) {
-        let (prev, next) = self.neighbors(arc);
-        self.data_mut(prev).next = next;
-        self.data_mut(next).prev = prev;
-        let height = self.height(arc);
-        for level in 0..height {
-            let (prev_skip, next_skip) = self.skips(arc, level);
-            self.set_prev_skip(next_skip, level, prev_skip);
-            self.set_next_skip(prev_skip, level, next_skip);
-        }
-        self.len -= 1;
-        self.levels[height - 1] -= 1;
-    }
-
-    fn height(&self, arc: Arc) -> usize {
-        for level in 0 .. HEIGHT {
-            if self.next_skip(arc, level).0 == INVALID {
-                return level;
-            }
-        }
-        HEIGHT
-    }
-
     fn insertion_height(&self) -> usize {
         if self.len == 0 {
-            return HEIGHT;
+            HEIGHT
+        } else {
+            1 + (0 .. HEIGHT).min_by_key(|&level| self.levels[level] * (1 << level)).unwrap()
         }
-        let mut best_height = 1;
-        let mut best_ratio = self.levels[0];
-        let mut multiplier = 1;
-        for level in 0 .. HEIGHT {
-            let ratio = self.levels[level] * multiplier;
-            if ratio < best_ratio {
-                best_ratio = ratio;
-                best_height = level + 1;
-            }
-            multiplier *= 2;
-        }
-        best_height
-    }
-
-    fn add_start(&mut self, vertex: usize) -> Start {
-        self.starts.push(vertex);
-        Start(self.starts.len() - 1)
-    }
-
-    fn data(&self, arc: Arc) -> &ArcData {
-        &self.arcs[arc.0]
-    }
-
-    fn data_mut(&mut self, arc: Arc) -> &mut ArcData {
-        &mut self.arcs[arc.0]
     }
 }
 
-impl Default for BeachLine {
-    fn default() -> Self {
-        Self {
-            arcs: Vec::default(),
-            free: Vec::default(),
-            head: Arc(INVALID),
-            len: 0,
-            levels: [0; HEIGHT],
-            starts: Vec::default(),
-        }
+impl Index<ArcId> for BeachLine {
+    type Output = Arc;
+
+    fn index(&self, arc: ArcId) -> &Self::Output {
+        &self.arcs[arc.0 as usize]
+    }
+}
+
+impl IndexMut<ArcId> for BeachLine {
+    fn index_mut(&mut self, arc: ArcId) -> &mut Self::Output {
+        &mut self.arcs[arc.0 as usize]
     }
 }
