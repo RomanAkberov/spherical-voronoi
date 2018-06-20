@@ -35,7 +35,7 @@ impl Voronoi {
         loop {
             let has_sites = self.site_index < self.site_events.len();
             if let Some(circle) = self.circle_events.iter().next().cloned() {
-                if has_sites && self.site_events[self.site_index].theta() < circle.theta {
+                if has_sites && self.site_events[self.site_index].theta < circle.theta {
                     self.site_event(visitor);
                 } else {
                     self.circle_event(&circle, visitor);
@@ -50,7 +50,7 @@ impl Voronoi {
 
     fn site_event<V: Visitor>(&mut self, visitor: &mut V) {
         visitor.cell();
-        let theta = self.site_events[self.site_index].theta();
+        let theta = self.site_events[self.site_index].theta;
         let arc = self.beach.insert(self.site_index, &self.site_events);
         let (prev, next) = self.beach.neighbors(arc);
         self.beach.add_common_start(arc, prev);

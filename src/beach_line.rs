@@ -215,7 +215,7 @@ impl BeachLine {
         let prev_site = &sites[self.site_index(arc)];
         let next_site = &sites[self.site_index(self.next(arc))];
         let intersection = &mut self.data_mut(arc).intersection;
-        let theta = site.theta();
+        let theta = site.theta;
         if intersection.theta < theta {
             intersection.theta = theta;
             intersection.phi = site.intersect(prev_site, next_site);

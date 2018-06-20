@@ -37,66 +37,50 @@ impl PartialEq for CircleEvent {
 
 impl Eq for CircleEvent {}
 
-#[derive(Copy, Clone)]
-struct Angle {
-    value: f64,
-    sin: f64,
-    cos: f64,
-}
-
-impl From<f64> for Angle {
-    fn from(value: f64) -> Self {
-        let (sin, cos) = value.sin_cos();
-        Angle { value, sin, cos }
-    }
-}
 
 #[derive(Copy, Clone)]
 pub struct SiteEvent {
     pub point: Point,
-    theta: Angle,
-    phi: Angle,
+    pub theta: f64,
+    pub phi: f64,
+    pub sin_theta: f64,
 }
 
 impl SiteEvent {
     pub fn new(point: &Point) -> Self {
-        let point = Point::new(point[0], point[1], point[2]).normalize();
+        let point = point.normalize();
         let (theta, phi) = (point.z.acos(), point.y.atan2(point.x));
+        let sin_theta = theta.sin();
         SiteEvent {
             point,
-            theta: Angle::from(theta),
-            phi: Angle::from(phi),
+            theta,
+            phi,
+            sin_theta,
         }
     }
 
-    pub fn theta(&self) -> f64 {
-        self.theta.value
-    }
-
-    pub fn intersect(&self, site0: &SiteEvent, site1: &SiteEvent) -> f64 {
-        let u1 = (self.theta.cos - site1.theta.cos) * site0.theta.sin;
-        let u2 = (self.theta.cos - site0.theta.cos) * site1.theta.sin;
-        let a = u1 * site0.phi.cos - u2 * site1.phi.cos;
-        let b = u1 * site0.phi.sin - u2 * site1.phi.sin;
-        let c = (site0.theta.cos - site1.theta.cos) * self.theta.sin;
+    pub fn intersect(&self, prev: &SiteEvent, next: &SiteEvent) -> f64 {
+        let d_prev = self.point.z - prev.point.z;
+        let d_next = self.point.z - next.point.z;
+        let a = d_next * prev.point.x - d_prev * next.point.x;
+        let b = d_next * prev.point.y - d_prev * next.point.y;
+        let c = (prev.point.z - next.point.z) * self.sin_theta;
         let length = (a * a + b * b).sqrt();
-        let gamma = a.atan2(b);
-        let phi_plus_gamma = (c / length).asin();
-        wrap(phi_plus_gamma - gamma - self.phi.value)
+        reduce_angle((c / length).asin() - a.atan2(b) - self.phi)
     }
 }
 
 impl PartialOrd for SiteEvent {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.theta.value.partial_cmp(&other.theta.value)
+        self.theta.partial_cmp(&other.theta)
     }
 }
 
 impl Ord for SiteEvent {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.theta.value < other.theta.value {
+        if self.theta < other.theta {
             Ordering::Less
-        } else if self.theta.value > other.theta.value {
+        } else if self.theta > other.theta {
             Ordering::Greater
         } else {
             Ordering::Equal
@@ -106,13 +90,13 @@ impl Ord for SiteEvent {
 
 impl PartialEq for SiteEvent {
     fn eq(&self, other: &Self) -> bool {
-        self.theta.value == other.theta.value
+        self.theta == other.theta
     }
 }
 
 impl Eq for SiteEvent {}
 
-fn wrap(mut phi: f64) -> f64 {
+fn reduce_angle(mut phi: f64) -> f64 {
     phi *= 0.5 * FRAC_1_PI;
     phi -= phi.floor();
     phi * 2.0 * PI
