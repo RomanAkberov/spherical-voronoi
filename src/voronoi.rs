@@ -5,7 +5,7 @@ use beach_line::{BeachLine, Arc};
 use super::Point;
 
 pub trait Visitor {
-    fn vertex(&mut self, point: [f64; 3], cells: [usize; 3]);
+    fn vertex(&mut self, point: Point, cells: [usize; 3]);
     fn edge(&mut self, vertices: [usize; 2]);
     fn cell(&mut self);
 }
@@ -19,7 +19,7 @@ struct Voronoi {
 }
 
 impl Voronoi {
-    fn new<P: AsRef<[f64; 3]>>(points: &[P]) -> Self {
+    fn new(points: &[Point]) -> Self {
         let mut site_events: Vec<SiteEvent> = points.iter().map(SiteEvent::new).collect();
         site_events.sort();
         Self {
@@ -132,6 +132,6 @@ impl Voronoi {
     }
 }
 
-pub fn build<P: AsRef<[f64; 3]>, V: Visitor>(points: &[P], visitor: &mut V) {
+pub fn build<V: Visitor>(points: &[Point], visitor: &mut V) {
     Voronoi::new(points).build(visitor);
 }

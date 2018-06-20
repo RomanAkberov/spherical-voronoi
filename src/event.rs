@@ -59,8 +59,8 @@ pub struct SiteEvent {
 }
 
 impl SiteEvent {
-    pub fn new<P: AsRef<[f64; 3]>>(point: &P) -> Self {
-        let point = Point::from(*point.as_ref()).normalize();
+    pub fn new(point: &Point) -> Self {
+        let point = Point::new(point[0], point[1], point[2]).normalize();
         let (theta, phi) = (point.z.acos(), point.y.atan2(point.x));
         SiteEvent {
             point,

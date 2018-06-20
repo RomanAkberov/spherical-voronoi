@@ -8,8 +8,7 @@ struct CentroidVisitor {
 }
 
 impl voronoi::Visitor for CentroidVisitor {
-    fn vertex(&mut self, point: [f64; 3], cells: [usize; 3]) {
-        let point = Point::from(point);
+    fn vertex(&mut self, point: Point, cells: [usize; 3]) {
         self.points[cells[0]] += point;
         self.points[cells[1]] += point;
         self.points[cells[2]] += point;
@@ -24,7 +23,7 @@ impl voronoi::Visitor for CentroidVisitor {
     }
 }
 
-pub fn build_relaxed<P: AsRef<[f64; 3]>, V: voronoi::Visitor>(points: &[P], visitor: &mut V, relaxations: usize) {
+pub fn build_relaxed<V: voronoi::Visitor>(points: &[Point], visitor: &mut V, relaxations: usize) {
     if relaxations > 0 {
         let mut centroids = CentroidVisitor::default();
         voronoi::build(points, &mut centroids);

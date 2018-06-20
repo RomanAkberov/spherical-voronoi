@@ -1,11 +1,11 @@
 [package]
 name = "spherical_voronoi"
 description = "Generate Voronoi diagrams on a sphere."
-version = "0.5.1"
+version = "0.6.0"
 authors = ["Roman Akberov <r.k.akberov@gmail.com>"]
 license = "MIT"
 keywords = ["voronoi", "sphere", "geometry"]
 repository = "https://github.com/RomanAkberov/spherical_voronoi"
 
 [dependencies]
-cgmath = "0.14"
+cgmath = "0.16"
