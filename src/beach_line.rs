@@ -65,14 +65,7 @@ impl BeachLine {
                     }
                 }
             }
-            let mut next = self.next(current);
-            let mut start = self.intersect_with_next(current, site, sites);
-            let mut end = self.intersect_with_next(next, site, sites);
-            while start < end {
-                next = self.next(next);
-                start = end;
-                end = self.intersect_with_next(next, site, sites);
-            }
+            let next = self.next(current);
             let site_index = self.site_index(next);
             let twin = self.create_arc(site_index);
             self.add_links(twin, current, next, &mut skips);
