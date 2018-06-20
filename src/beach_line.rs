@@ -76,13 +76,14 @@ impl BeachLine {
             let mut next = ArcId::NONE;
             let mut height = HEIGHT;
             let mut links = [ArcId::NONE; HEIGHT];
+            let sin_theta = event.theta.sin();
             while height > 0 {
                 next = self[current].links[height - 1].next;
-                if self.intersect(current, event) < self.intersect(next, event) {
+                if self.intersect(current, event, sin_theta) < self.intersect(next, event, sin_theta) {
                     current = next;
                 } else {
-                    links[height - 1] = current;
                     height -= 1;
+                    links[height] = current;
                 }
             }
             let twin_index = self[next].cell_index;
@@ -221,7 +222,7 @@ impl BeachLine {
         }
     }
 
-    fn intersect(&mut self, arc: ArcId, event: &CellEvent) -> f64 {
+    fn intersect(&mut self, arc: ArcId, event: &CellEvent, sin_theta: f64) -> f64 {
         let cached = self[arc].cached_intersection;
         let theta = event.theta;
         if cached.theta >= theta {
@@ -229,7 +230,7 @@ impl BeachLine {
         }       
         let point0 = self[arc].focus;
         let point1 = self[self[arc].next()].focus;
-        let phi = event.intersect(&point0, &point1);
+        let phi = event.intersect(&point0, &point1, sin_theta);
         self[arc].cached_intersection = Spherical { theta, phi };
         phi
     }
