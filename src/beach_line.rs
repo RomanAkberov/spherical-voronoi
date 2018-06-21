@@ -14,10 +14,10 @@ struct Spherical {
 }
 
 #[derive(Copy, Clone, PartialEq)]
-pub struct ArcId(u32);
+pub struct ArcId(u16);
 
 impl ArcId {
-    pub const NONE: Self = ArcId(::std::u32::MAX);
+    pub const NONE: Self = ArcId(::std::u16::MAX);
 }
 
 impl Default for ArcId {
@@ -218,7 +218,7 @@ impl BeachLine {
             arc
         } else {
             self.arcs.push(data);
-            ArcId(self.arcs.len() as u32 - 1)
+            ArcId(self.arcs.len() as u16 - 1)
         }
     }
 
