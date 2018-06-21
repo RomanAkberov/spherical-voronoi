@@ -5,7 +5,7 @@ use cgmath::prelude::*;
 use event::CellEvent;
 use super::Point;
 
-const HEIGHT: usize = 5;
+const HEIGHT: usize = 6;
 
 #[derive(Copy, Clone, Default)]
 struct Spherical {

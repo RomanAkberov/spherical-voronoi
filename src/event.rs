@@ -22,8 +22,15 @@ impl CellEvent {
         let a = dz1 * point0.x - dz0 * point1.x;
         let b = dz1 * point0.y - dz0 * point1.y;
         let c = (point0.z - point1.z) * sin_theta;
-        let length = (a * a + b * b).sqrt();
-        reduce_angle((c / length).asin() - a.atan2(b) - self.phi)
+        let ab_hyp = 1.0 / (a * a + b * b).sqrt();
+        let gamma = if b > 0.0 {
+            (a * ab_hyp).asin()
+        } else if a > 0.0 {
+            (b * ab_hyp).acos()
+        } else {
+            (b * ab_hyp).acos() - 2.0 * (a * ab_hyp).asin()
+        };
+        reduce_angle((c * ab_hyp).asin() - gamma - self.phi)
     }
 }
 
