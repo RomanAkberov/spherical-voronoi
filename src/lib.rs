@@ -6,4 +6,4 @@ mod voronoi;
 
 pub type Point = ::cgmath::Vector3<f64>;
 
-pub use voronoi::{build_relaxed, Visitor};
+pub use voronoi::{build, Visitor};

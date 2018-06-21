@@ -108,7 +108,7 @@ pub trait Visitor {
     fn visit(&mut self, point: Point, cells: [usize; 3]);
 }
 
-pub fn build_relaxed<V: Visitor>(visitor: &mut V, points: &[Point], num_relaxations: usize) {
+pub fn build<V: Visitor>(visitor: &mut V, points: &[Point], num_relaxations: usize) {
     let mut voronoi = Voronoi::default();
     let mut relaxer = Relaxer::new(points.len());
     voronoi.begin(points);
